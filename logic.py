@@ -242,6 +242,36 @@ def create_demo_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     active_bookings_demo = df_demo[df_demo['Tình trạng'] != 'Đã hủy'].copy()
     return df_demo, active_bookings_demo
 
+def export_data_to_new_sheet(df: pd.DataFrame, gcp_creds_dict: dict, sheet_id: str) -> str:
+    """Exports a DataFrame to a new worksheet in the specified spreadsheet."""
+    print("Bắt đầu quá trình export...")
+    scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_service_account_info(gcp_creds_dict, scopes=scope)
+    gc = gspread.authorize(creds)
+    spreadsheet = gc.open_by_key(sheet_id)
+
+    # Tạo tên worksheet mới
+    worksheet_name = f"Export_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    
+    # Tạo worksheet mới
+    # Chuyển đổi DataFrame sang chuỗi để tránh lỗi JSON
+    df_str = df.astype(str)
+    
+    new_worksheet = spreadsheet.add_worksheet(
+        title=worksheet_name, 
+        rows=str(len(df_str) + 1), 
+        cols=str(df_str.shape[1])
+    )
+
+    # Chuẩn bị dữ liệu để ghi
+    data_to_write = [df_str.columns.values.tolist()] + df_str.values.tolist()
+
+    # Ghi dữ liệu vào sheet mới
+    new_worksheet.update(data_to_write, 'A1')
+    print(f"Export thành công ra sheet: {worksheet_name}")
+    
+    return worksheet_name
+
 def filter_data(df, start_date, end_date, room_type, purchase_party, min_price, max_price):
     """
     Filter the dataframe based on user inputs.

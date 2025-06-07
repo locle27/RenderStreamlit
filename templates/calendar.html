@@ -4,6 +4,15 @@
 
 {% block content %}
 <style>
+    .day-link {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        height: 100%;
+    }
+    .day-link:hover {
+        background-color: #f1f1f1;
+    }
     .calendar-table {
         width: 100%;
         border-collapse: collapse;
@@ -69,23 +78,26 @@
                 {% for day in week %}
                 <td class="{{ 'other-month' if day == 0 }}">
                     {% if day != 0 %}
-                        <div class="calendar-day">{{ day }}</div>
-                        {% set day_info = activities.get(day) %}
-                        {% if day_info %}
-                            <div class="activity">
-                                <span class="status-text">{{ day_info.status_text }}</span>
-                            </div>
-                            {% if day_info.check_in %}
-                                <div class="activity check-in" title="{{ day_info.check_in|join(', ') }}">
-                                    <strong>Đến:</strong> {{ day_info.check_in|length }}
+                        {% set date_str = '%d-%02d-%02d' | format(year, month, day) %}
+                        <a href="{{ url_for('calendar_day_details', date_str=date_str) }}" class="day-link">
+                            <div class="calendar-day">{{ day }}</div>
+                            {% set day_info = activities.get(day) %}
+                            {% if day_info %}
+                                <div class="activity">
+                                    <span class="status-text">{{ day_info.status_text }}</span>
                                 </div>
+                                {% if day_info.check_in %}
+                                    <div class="activity check-in" title="{{ day_info.check_in|join(', ') }}">
+                                        <strong>Đến:</strong> {{ day_info.check_in|length }}
+                                    </div>
+                                {% endif %}
+                                {% if day_info.check_out %}
+                                    <div class="activity check-out" title="{{ day_info.check_out|join(', ') }}">
+                                        <strong>Đi:</strong> {{ day_info.check_out|length }}
+                                    </div>
+                                {% endif %}
                             {% endif %}
-                            {% if day_info.check_out %}
-                                <div class="activity check-out" title="{{ day_info.check_out|join(', ') }}">
-                                    <strong>Đi:</strong> {{ day_info.check_out|length }}
-                                </div>
-                            {% endif %}
-                        {% endif %}
+                        </a>
                     {% endif %}
                 </td>
                 {% endfor %}

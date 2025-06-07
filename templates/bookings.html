@@ -1,14 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Quản lý Đặt phòng{% endblock %}
 {% block content %}
-    <h1 class="mb-4">📋 Quản lý Đặt phòng</h1>
-    
-    <form method="GET" action="{{ url_for('view_bookings') }}" class="mb-4">
-        <div class="input-group">
-            <input type="text" class="form-control" name="search_term" placeholder="Tìm theo tên khách hoặc mã đặt phòng..." value="{{ search_term or '' }}">
-            <button class="btn btn-outline-secondary" type="submit">Tìm kiếm</button>
+    <h1 class="mb-4">📋 Quản lý Đặt phòng ({{ booking_count }})</h1>
+
+    <!-- Form tìm kiếm -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <form method="GET" action="{{ url_for('view_bookings') }}" class="d-flex">
+                <input type="search" name="search_term" class="form-control me-2" placeholder="Tìm theo tên hoặc số đặt phòng..." value="{{ search_term }}">
+                <button type="submit" class="btn btn-primary">Tìm</button>
+            </form>
         </div>
-    </form>
+    </div>
+    
+    <!-- Nút chức năng Import/Export -->
+    <div class="d-flex justify-content-end mb-3">
+        <a href="{{ url_for('sync_bookings') }}" class="btn btn-info me-2">
+            🔄 Đồng bộ từ Google Sheets
+        </a>
+        <a href="{{ url_for('export_bookings') }}" class="btn btn-success">
+            📤 Export ra Sheet mới
+        </a>
+    </div>
 
     <p>Tìm thấy {{ booking_count }} kết quả.</p>
 

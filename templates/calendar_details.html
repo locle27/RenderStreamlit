@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Chi tiết Ngày {{ date.strftime('%d-%m-%Y') }}{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">Chi tiết Hoạt động Ngày: {{ date.strftime('%d/%m/%Y') }}</h1>
+
+    <div class="row">
+        <!-- Cột Check-in -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">✅ Khách Check-in</h5>
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% if activities.check_in %}
+                        {% for guest in activities.check_in %}
+                            <li class="list-group-item">{{ guest }}</li>
+                        {% endfor %}
+                    {% else %}
+                        <li class="list-group-item">Không có khách nào check-in trong ngày này.</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Cột Check-out -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">🚪 Khách Check-out</h5>
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% if activities.check_out %}
+                        {% for guest in activities.check_out %}
+                            <li class="list-group-item">{{ guest }}</li>
+                        {% endfor %}
+                    {% else %}
+                        <li class="list-group-item">Không có khách nào check-out trong ngày này.</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <hr>
+    <a href="{{ url_for('calendar_view', year=date.year, month=date.month) }}" class="btn btn-secondary mt-3">⬅️ Quay lại Lịch</a>
+{% endblock %} 

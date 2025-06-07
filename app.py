@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from dotenv import load_dotenv
 import json
 from functools import lru_cache
@@ -10,6 +10,7 @@ import plotly.express as px
 import calendar
 from datetime import datetime
 import google.generativeai as genai
+import base64
 
 # Import các hàm logic
 from logic import (
@@ -17,7 +18,8 @@ from logic import (
     get_month_activities, extract_booking_info_from_image_content,
     append_booking_to_sheet,
     get_message_templates, add_message_template,
-    find_booking_by_id, update_booking_in_sheet, delete_booking_from_sheet
+    find_booking_by_id, update_booking_in_sheet, delete_booking_from_sheet,
+    get_daily_activity, export_data_to_new_sheet
 )
 
 # Cấu hình đường dẫn và secrets
@@ -163,6 +165,26 @@ def calendar_view(year=None, month=None):
         prev_month=prev_month_date.month
     )
 
+@app.route('/calendar/details/<string:date_str>')
+def calendar_day_details(date_str):
+    """Hiển thị chi tiết check-in và check-out cho một ngày cụ thể."""
+    try:
+        # Chuyển đổi chuỗi ngày YYYY-MM-DD thành đối tượng date
+        parsed_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        flash("Định dạng ngày không hợp lệ.", "danger")
+        return redirect(url_for('calendar_view'))
+
+    # Tải dữ liệu và lấy hoạt động của ngày đó
+    _, active_bookings = load_data()
+    daily_activities = get_daily_activity(parsed_date, active_bookings)
+
+    return render_template(
+        'calendar_details.html', 
+        date=parsed_date, 
+        activities=daily_activities
+    )
+
 @app.route('/bookings/add_from_image', methods=['GET', 'POST'])
 def add_from_image():
     if request.method == 'POST':
@@ -218,6 +240,34 @@ def save_extracted_bookings():
         flash(f'Đã xảy ra lỗi khi lưu: {e}', 'danger')
 
     return redirect(url_for('view_bookings'))
+
+@app.route('/api/process_pasted_image', methods=['POST'])
+def process_pasted_image():
+    """
+    Xử lý ảnh được dán từ clipboard (dưới dạng base64) và trả về dữ liệu JSON.
+    """
+    try:
+        data = request.get_json()
+        if not data or 'image_b64' not in data:
+            return jsonify({'error': 'Không có dữ liệu ảnh base64'}), 400
+
+        # Tách phần header của chuỗi base64 (ví dụ: "data:image/png;base64,")
+        image_data = data['image_b64'].split(',')[1]
+        
+        # Giải mã chuỗi base64
+        image_bytes = base64.b64decode(image_data)
+        
+        # Trích xuất thông tin
+        extracted_data = extract_booking_info_from_image_content(image_bytes)
+        
+        if extracted_data is None:
+            return jsonify({'error': 'Không thể trích xuất dữ liệu từ ảnh.'}), 500
+
+        return jsonify(extracted_data)
+
+    except Exception as e:
+        print(f"Lỗi khi xử lý ảnh dán: {e}")
+        return jsonify({'error': 'Lỗi máy chủ nội bộ'}), 500
 
 @app.route('/templates', methods=['GET', 'POST'])
 def manage_templates():
@@ -291,6 +341,31 @@ def delete_booking(booking_id):
     except Exception as e:
         flash(f'Lỗi khi xóa đặt phòng: {e}', 'danger')
 
+    return redirect(url_for('view_bookings'))
+
+@app.route('/bookings/sync')
+def sync_bookings():
+    # Xóa cache để buộc tải lại dữ liệu
+    load_data.cache_clear()
+    flash('Dữ liệu đã được yêu cầu đồng bộ lại từ Google Sheets. Thay đổi sẽ được áp dụng trong lần tải trang tiếp theo.', 'info')
+    return redirect(url_for('view_bookings'))
+
+@app.route('/bookings/export')
+def export_bookings():
+    try:
+        df, _ = load_data()
+        if not df.empty:
+            worksheet_name = export_data_to_new_sheet(
+                df=df,
+                gcp_creds_dict=GCP_CREDS_DICT,
+                sheet_id=DEFAULT_SHEET_ID
+            )
+            flash(f'Đã export dữ liệu thành công ra sheet mới có tên: "{worksheet_name}"', 'success')
+        else:
+            flash('Không có dữ liệu để export.', 'warning')
+    except Exception as e:
+        flash(f'Lỗi khi export dữ liệu: {e}', 'danger')
+        
     return redirect(url_for('view_bookings'))
 
 if __name__ == '__main__':
