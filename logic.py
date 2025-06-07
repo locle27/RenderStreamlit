@@ -15,6 +15,7 @@ import plotly.express as px
 import plotly.io as p_json
 import plotly
 import calendar
+from io import BytesIO
 # Thêm các import khác nếu cần 
 
 def delete_booking_from_sheet(booking_id: str, gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> bool:
@@ -198,6 +199,8 @@ def import_from_gsheet(sheet_id: str, gcp_creds_dict: dict, worksheet_name: str 
         df['Tổng thanh toán'] = pd.to_numeric(df['Tổng thanh toán'], errors='coerce').fillna(0)
     if 'Check-in Date' in df.columns:
         df['Check-in Date'] = pd.to_datetime(df['Check-in Date'], errors='coerce')
+    if 'Check-out Date' in df.columns:
+        df['Check-out Date'] = pd.to_datetime(df['Check-out Date'], errors='coerce')
         
     return df
 
@@ -229,15 +232,16 @@ def create_demo_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     demo_data = {
         'Tên chỗ nghỉ': ['Home in Old Quarter', 'Old Quarter Home', 'Home in Old Quarter', 'Riverside Apartment'],
         'Tên người đặt': ['Demo User Alpha', 'Demo User Beta', 'Demo User Gamma', 'Demo User Delta'],
-        'Ngày đến': ['ngày 22 tháng 5 năm 2025', 'ngày 23 tháng 5 năm 2025', 'ngày 26 tháng 5 năm 2025', 'ngày 1 tháng 6 năm 2025'],
-        'Ngày đi': ['ngày 23 tháng 5 năm 2025', 'ngày 24 tháng 5 năm 2025', 'ngày 28 tháng 5 năm 2025', 'ngày 5 tháng 6 năm 2025'],
+        'Ngày đến': ['2025-05-22', '2025-05-23', '2025-05-26', '2025-06-01'],
+        'Ngày đi': ['2025-05-23', '2025-05-24', '2025-05-28', '2025-06-05'],
         'Tình trạng': ['OK', 'OK', 'OK', 'OK'],
         'Tổng thanh toán': [300000, 450000, 600000, 1200000],
         'Số đặt phòng': [f'DEMO{i+1:09d}' for i in range(4)],
         'Người thu tiền': ['LOC LE', 'THAO LE', 'THAO LE', 'LOC LE']
     }
     df_demo = pd.DataFrame(demo_data)
-    df_demo['Check-in Date'] = pd.to_datetime(df_demo['Ngày đến'].apply(parse_app_standard_date), errors='coerce')
+    df_demo['Check-in Date'] = pd.to_datetime(df_demo['Ngày đến'], errors='coerce')
+    df_demo['Check-out Date'] = pd.to_datetime(df_demo['Ngày đi'], errors='coerce')
     df_demo['Tổng thanh toán'] = pd.to_numeric(df_demo['Tổng thanh toán'], errors='coerce').fillna(0)
     active_bookings_demo = df_demo[df_demo['Tình trạng'] != 'Đã hủy'].copy()
     return df_demo, active_bookings_demo
@@ -250,11 +254,8 @@ def export_data_to_new_sheet(df: pd.DataFrame, gcp_creds_dict: dict, sheet_id: s
     gc = gspread.authorize(creds)
     spreadsheet = gc.open_by_key(sheet_id)
 
-    # Tạo tên worksheet mới
-    worksheet_name = f"Export_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    worksheet_name = f"Export_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     
-    # Tạo worksheet mới
-    # Chuyển đổi DataFrame sang chuỗi để tránh lỗi JSON
     df_str = df.astype(str)
     
     new_worksheet = spreadsheet.add_worksheet(
@@ -263,10 +264,7 @@ def export_data_to_new_sheet(df: pd.DataFrame, gcp_creds_dict: dict, sheet_id: s
         cols=str(df_str.shape[1])
     )
 
-    # Chuẩn bị dữ liệu để ghi
     data_to_write = [df_str.columns.values.tolist()] + df_str.values.tolist()
-
-    # Ghi dữ liệu vào sheet mới
     new_worksheet.update(data_to_write, 'A1')
     print(f"Export thành công ra sheet: {worksheet_name}")
     
@@ -344,57 +342,39 @@ def calculate_kpis(df):
     }
 
 def prepare_charts_data(df: pd.DataFrame) -> dict:
-    """
-    Chuẩn bị dữ liệu đã được tổng hợp cho các biểu đồ trên Dashboard.
-    Sử dụng tên cột tiếng Việt từ dữ liệu gốc.
-    """
     if df.empty:
         return {
-            'monthly_revenue': pd.DataFrame(columns=['Tháng', 'Doanh thu']),
-            'room_revenue': pd.DataFrame(columns=['Loại phòng', 'Doanh thu']),
-            'collector_revenue': pd.DataFrame(columns=['Người thu tiền', 'Doanh thu'])
+            'monthly_revenue': pd.DataFrame(columns=['Tháng', 'Tổng thanh toán']),
+            'room_revenue': pd.DataFrame(columns=['Tên chỗ nghỉ', 'Tổng thanh toán']),
+            'collector_revenue': pd.DataFrame(columns=['Người thu tiền', 'Tổng thanh toán'])
         }
 
-    # Đảm bảo các cột cần thiết tồn tại và đúng kiểu dữ liệu
     required_cols = {
-        'Check-in Date': 'datetime64[ns]',
-        'Tổng thanh toán': 'float64',
-        'Tên chỗ nghỉ': 'object',
-        'Người thu tiền': 'object'
+        'Check-in Date': 'datetime64[ns]', 'Tổng thanh toán': 'float64',
+        'Tên chỗ nghỉ': 'object', 'Người thu tiền': 'object'
     }
     
     for col, dtype in required_cols.items():
         if col not in df.columns:
-            # Nếu cột không tồn tại, tạo cột rỗng với kiểu dữ liệu phù hợp
-            if 'datetime' in dtype:
-                df[col] = pd.NaT
-            elif 'float' in dtype:
-                df[col] = 0.0
-            else:
-                df[col] = 'N/A'
-        # Ép kiểu để đảm bảo tính toán chính xác
-        if 'datetime' in dtype:
-            df[col] = pd.to_datetime(df[col], errors='coerce')
-        elif 'float' in dtype:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            if 'datetime' in dtype: df[col] = pd.NaT
+            elif 'float' in dtype: df[col] = 0.0
+            else: df[col] = 'N/A'
+        if 'datetime' in dtype: df[col] = pd.to_datetime(df[col], errors='coerce')
+        elif 'float' in dtype: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    # 1. Doanh thu hàng tháng
     df_monthly = df.dropna(subset=['Check-in Date']).copy()
     df_monthly['Tháng'] = df_monthly['Check-in Date'].dt.to_period('M').astype(str)
     monthly_revenue = df_monthly.groupby('Tháng')['Tổng thanh toán'].sum().reset_index()
     monthly_revenue = monthly_revenue.sort_values('Tháng')
 
-    # 2. Doanh thu theo loại phòng
     room_revenue = df.groupby('Tên chỗ nghỉ')['Tổng thanh toán'].sum().reset_index()
     room_revenue = room_revenue.sort_values('Tổng thanh toán', ascending=False)
 
-    # 3. Doanh thu theo người thu tiền
     collector_revenue = df.groupby('Người thu tiền')['Tổng thanh toán'].sum().reset_index()
     collector_revenue = collector_revenue.sort_values('Tổng thanh toán', ascending=False)
 
     return {
-        'monthly_revenue': monthly_revenue,
-        'room_revenue': room_revenue,
+        'monthly_revenue': monthly_revenue, 'room_revenue': room_revenue,
         'collector_revenue': collector_revenue
     }
 
@@ -430,95 +410,71 @@ def append_booking_to_sheet(new_booking_data: dict, gcp_creds_dict: dict, sheet_
 # AI AND IMAGE PROCESSING FUNCTIONS
 # ==============================================================================
 
-def extract_booking_info_from_image_content(image_bytes: bytes) -> Optional[List[Dict[str, Any]]]:
-    """
-    Extracts booking information from an image using Google Gemini.
-    
-    NOTE: This is a placeholder implementation. The actual AI model call is needed.
-    """
-    print("Attempting to extract booking info from image...")
-    
-    # Placeholder: Check if the Gemini library is configured
-    if not genai.get_model('models/gemini-pro-vision'):
-        print("Lỗi: Gemini Pro Vision model is not configured. Cannot process image.")
-        return None
-        
+def extract_booking_info_from_image_content(image_bytes: bytes) -> List[Dict[str, Any]]:
     try:
-        # This is where the actual call to the Gemini API would go.
-        # For now, we will return a hardcoded sample result for demonstration.
-        print("Bỏ qua lệnh gọi AI thực tế. Trả về dữ liệu mẫu.")
-        sample_data = [
-            {
-                'Tên người đặt': 'John Doe (from Image)',
-                'Số đặt phòng': 'IMG-12345',
-                'Ngày đến': '2025-12-01',
-                'Ngày đi': '2025-12-03',
-                'Tên chỗ nghỉ': 'Sample Room',
-                'Tổng thanh toán': 500000,
-                'Tình trạng': 'OK'
-            },
-            {
-                'Tên người đặt': 'Jane Smith (from Image)',
-                'Số đặt phòng': 'IMG-67890',
-                'Ngày đến': '2025-12-05',
-                'Ngày đi': '2025-12-06',
-                'Tên chỗ nghỉ': 'Another Sample Room',
-                'Tổng thanh toán': 250000,
-                'Tình trạng': 'OK'
-            }
-        ]
-        return sample_data
+        img = Image.open(BytesIO(image_bytes))
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = """
+        Bạn là một trợ lý nhập liệu chuyên nghiệp cho khách sạn, có nhiệm vụ trích xuất thông tin từ một hình ảnh.
+        Hình ảnh này có thể chứa một bảng hoặc danh sách của NHIỀU đặt phòng.
+        Nhiệm vụ của bạn:
+        1. Quét toàn bộ hình ảnh và xác định từng hàng (mỗi hàng là một đặt phòng riêng biệt).
+        2. Với MỖI đặt phòng, hãy trích xuất các thông tin sau.
+        3. Trả về kết quả dưới dạng một MẢNG JSON (JSON array), trong đó mỗi phần tử của mảng là một đối tượng JSON đại diện cho một đặt phòng.
+        Cấu trúc của mỗi đối tượng JSON trong mảng phải như sau:
+        - "guest_name" (string): Họ và tên đầy đủ của khách.
+        - "booking_id" (string): Mã số đặt phòng.
+        - "check_in_date" (string): Ngày nhận phòng theo định dạng YYYY-MM-DD.
+        - "check_out_date" (string): Ngày trả phòng theo định dạng YYYY-MM-DD.
+        - "room_type" (string): Tên loại phòng đã đặt.
+        - "total_payment" (number): Tổng số tiền thanh toán (chỉ lấy số).
+        YÊU CẦU CỰC KỲ QUAN TRỌNG:
+        - Kết quả cuối cùng PHẢI là một mảng JSON, ví dụ: [ { ...booking1... }, { ...booking2... } ].
+        - Chỉ trả về đối tượng JSON thô, không kèm theo bất kỳ văn bản giải thích hay định dạng markdown nào như ```json.
+        - Nếu không tìm thấy thông tin cho trường nào, hãy đặt giá trị là null.
+        """
+        response = model.generate_content([prompt, img], stream=False)
+        response.resolve()
+        
+        json_text = response.text.strip().replace('```json', '').replace('```', '').strip()
+        list_of_bookings_data = json.loads(json_text)
+        
+        if isinstance(list_of_bookings_data, dict):
+            list_of_bookings_data = [list_of_bookings_data]
+            
+        return list_of_bookings_data
+
+    except json.JSONDecodeError:
+        return [{"error": "Lỗi: AI trả về định dạng JSON không hợp lệ."}]
     except Exception as e:
-        print(f"An error occurred during image extraction: {e}")
-        return None
+        return [{"error": f"Lỗi không xác định khi xử lý ảnh: {str(e)}"}]
 
 # ==============================================================================
 # CALENDAR LOGIC FUNCTIONS
 # ==============================================================================
 
-def get_daily_activity(date_to_check: datetime.date, df: pd.DataFrame) -> Dict[str, List[str]]:
-    """
-    Gets check-in and check-out activities for a specific day.
-    """
-    activities = {'check_in': [], 'check_out': []}
-    if df.empty:
-        return activities
-
-    # Convert DataFrame date columns to datetime.date objects for comparison
-    df['check_in_date_only'] = pd.to_datetime(df['Ngày đến'].apply(parse_app_standard_date), errors='coerce').dt.date
-    df['check_out_date_only'] = pd.to_datetime(df['Ngày đi'].apply(parse_app_standard_date), errors='coerce').dt.date
-
-    # Find check-ins for the given day
-    check_ins = df[df['check_in_date_only'] == date_to_check]
-    if not check_ins.empty:
-        activities['check_in'] = check_ins['Tên người đặt'].tolist()
-
-    # Find check-outs for the given day
-    check_outs = df[df['check_out_date_only'] == date_to_check]
-    if not check_outs.empty:
-        activities['check_out'] = check_outs['Tên người đặt'].tolist()
-        
-    return activities
-
-def get_overall_calendar_day_info(date_to_check: datetime.date, df: pd.DataFrame, total_capacity: int) -> Dict[str, Any]:
-    """
-    Calculates the occupancy info for a specific day.
-    """
-    if df.empty:
-        return {'occupied_units': 0, 'available_units': total_capacity, 'status_text': f"{total_capacity}/{total_capacity} trống"}
-
-    # Ensure date columns are present and in the correct format
-    df['check_in_date_only'] = pd.to_datetime(df['Ngày đến'].apply(parse_app_standard_date), errors='coerce').dt.date
-    df['check_out_date_only'] = pd.to_datetime(df['Ngày đi'].apply(parse_app_standard_date), errors='coerce').dt.date
+def get_daily_activity(date_to_check: datetime.date, df: pd.DataFrame) -> dict:
+    df['Check-in Date'] = pd.to_datetime(df['Check-in Date']).dt.date
+    df['Check-out Date'] = pd.to_datetime(df['Check-out Date']).dt.date
     
-    # A room is occupied if the guest has checked in but not yet checked out
-    occupied_df = df[
-        (df['check_in_date_only'] <= date_to_check) & 
-        (df['check_out_date_only'] > date_to_check)
+    check_ins = df[df['Check-in Date'] == date_to_check]
+    check_outs = df[df['Check-out Date'] == date_to_check]
+    
+    return {
+        'check_in': check_ins.to_dict(orient='records'),
+        'check_out': check_outs.to_dict(orient='records')
+    }
+
+def get_overall_calendar_day_info(date_to_check: datetime.date, df: pd.DataFrame, total_capacity: int) -> dict:
+    df['Check-in Date'] = pd.to_datetime(df['Check-in Date']).dt.date
+    df['Check-out Date'] = pd.to_datetime(df['Check-out Date']).dt.date
+    
+    active_on_date = df[
+        (df['Check-in Date'] <= date_to_check) & (df['Check-out Date'] > date_to_check)
     ]
-    
-    occupied_units = len(occupied_df)
-    available_units = total_capacity - occupied_units
+    occupied_units = len(active_on_date)
+    available_units = max(0, total_capacity - occupied_units)
     
     return {
         'occupied_units': occupied_units,

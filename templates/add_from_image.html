@@ -1,188 +1,117 @@
 {% extends "base.html" %}
 
-{% block title %}Thêm Đặt phòng từ Ảnh{% endblock %}
+{% block title %}Thêm từ Ảnh{% endblock %}
 
 {% block content %}
-    <h1 class="mb-4">🖼️ Thêm Đặt phòng từ Ảnh</h1>
-    <p class="lead mb-4">Tải lên ảnh chụp màn hình danh sách đặt phòng để AI tự động trích xuất thông tin.</p>
+<h1 class="mb-4">📸 Thêm Đặt phòng từ Ảnh</h1>
+<p>Sao chép một ảnh chụp màn hình danh sách đặt phòng và dán (Ctrl+V) vào khung bên dưới.</p>
 
-    <div class="row">
-        <!-- Cột tải file -->
-        <div class="col-md-6">
-            <div class="card bg-light mb-4 h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Cách 1: Tải file ảnh lên</h5>
-                    <form id="upload-image-form" method="POST" enctype="multipart/form-data">
-                        <div class="mb-3">
-                            <label for="image_file_input" class="form-label">Chọn file ảnh</label>
-                            <input type="file" name="image_file" id="image_file_input" class="form-control" accept="image/*">
-                        </div>
-                        <button id="extract-button" type="submit" class="btn btn-primary">
-                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                            Trích xuất từ File
-                        </button>
-                    </form>
-                </div>
-            </div>
+<div id="paste-area" class="p-5 border-2 border-dashed rounded-3 text-center bg-light mb-4" style="border-style: dashed;">
+    <h4>Dán ảnh vào đây</h4>
+</div>
+
+<div id="results-area" class="d-none">
+    <h2 class="mb-3">Kết quả trích xuất</h2>
+    <div id="spinner" class="text-center my-4 d-none">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Đang xử lý...</span>
         </div>
-        <!-- Cột dán ảnh -->
-        <div class="col-md-6">
-            <div class="card bg-light mb-4 h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Cách 2: Dán ảnh trực tiếp</h5>
-                    <div id="paste-area" class="d-flex justify-content-center align-items-center border-dashed" style="height: 150px; border: 2px dashed #ccc; cursor: pointer;">
-                        <span id="paste-placeholder">Dán ảnh vào đây (Ctrl+V)</span>
-                        <img id="pasted-image-preview" src="#" alt="Pasted Image Preview" class="d-none" style="max-height: 100%; max-width: 100%;"/>
-                    </div>
-                     <div id="paste-spinner" class="text-center mt-2 d-none">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p>Đang xử lý...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <p>AI đang phân tích ảnh, vui lòng chờ...</p>
     </div>
-
-
-    <div id="results-card" class="card d-none">
-        <div class="card-body">
-            <h5 class="card-title">Bước 2: Xác nhận và Lưu</h5>
-            <p>Đây là dữ liệu AI đã trích xuất được. Vui lòng kiểm tra và nhấn lưu.</p>
-            
-            <form id="save-extracted-form" method="POST" action="{{ url_for('save_extracted_bookings') }}">
-                <input type="hidden" id="extracted-json-input" name="extracted_data_json">
-                
-                <div id="results-table" class="table-responsive">
-                    <!-- Bảng sẽ được điền bằng JS -->
-                </div>
-
-                <button type="submit" class="btn btn-success mt-3">Lưu các đặt phòng này</button>
-            </form>
-        </div>
-    </div>
-    
-    <div id="initial-data-container" data-extracted="{{ extracted_data | tojson | safe }}"></div>
+    <div id="error-message" class="alert alert-danger d-none"></div>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Tên khách</th>
+                <th>Mã ĐP</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
+                <th>Loại phòng</th>
+                <th>Tổng tiền</th>
+            </tr>
+        </thead>
+        <tbody id="results-tbody">
+            <!-- Kết quả sẽ được chèn vào đây bằng JavaScript -->
+        </tbody>
+    </table>
+    <!-- Form để lưu sẽ được thêm sau -->
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Hàm chung để hiển thị dữ liệu đã trích xuất
-    function displayExtractedData(data) {
-        const resultsCard = document.getElementById('results-card');
-        const tableContainer = document.getElementById('results-table');
-        const jsonInput = document.getElementById('extracted-json-input');
+document.addEventListener('paste', async function (event) {
+    const pasteArea = document.getElementById('paste-area');
+    const resultsArea = document.getElementById('results-area');
+    const resultsTbody = document.getElementById('results-tbody');
+    const spinner = document.getElementById('spinner');
+    const errorMessage = document.getElementById('error-message');
 
-        if (!data || data.length === 0 || (data && data.error)) {
-            let errorMessage = data && data.error ? data.error : 'Không trích xuất được dữ liệu hoặc ảnh không hợp lệ.';
-            tableContainer.innerHTML = `<p class="text-danger">${errorMessage}</p>`;
-            resultsCard.classList.remove('d-none');
-            jsonInput.value = ''; 
-            return;
+    // Lấy dữ liệu ảnh từ clipboard
+    const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+    let imageFile = null;
+    for (const item of items) {
+        if (item.type.indexOf('image') !== -1) {
+            imageFile = item.getAsFile();
+            break;
         }
-        
-        jsonInput.value = JSON.stringify(data);
-
-        let tableHTML = '<table class="table table-bordered"><thead class="table-dark"><tr>';
-        const headers = Object.keys(data[0]);
-        headers.forEach(key => tableHTML += `<th>${key}</th>`);
-        tableHTML += '</tr></thead><tbody>';
-
-        data.forEach(row => {
-            tableHTML += '<tr>';
-            headers.forEach(key => {
-                const value = row[key] !== null && row[key] !== undefined ? row[key] : '';
-                tableHTML += `<td>${value}</td>`
-            });
-            tableHTML += '</tr>';
-        });
-
-        tableHTML += '</tbody></table>';
-        tableContainer.innerHTML = tableHTML;
-        resultsCard.classList.remove('d-none');
     }
 
-    // Listener cho sự kiện tải trang
-    document.addEventListener('DOMContentLoaded', function() {
-        
-        // 1. Xử lý dữ liệu từ server-side (nếu có)
-        const initialDataContainer = document.getElementById('initial-data-container');
-        const initialData = initialDataContainer.getAttribute('data-extracted');
-        if (initialData) {
+    if (imageFile) {
+        // Hiển thị khu vực kết quả và spinner
+        resultsArea.classList.remove('d-none');
+        spinner.classList.remove('d-none');
+        errorMessage.classList.add('d-none');
+        resultsTbody.innerHTML = ''; // Xóa kết quả cũ
+
+        // Chuyển ảnh sang Base64
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const image_b64 = e.target.result;
+            
             try {
-                const serverData = JSON.parse(initialData);
-                if (serverData) {
-                    displayExtractedData(serverData);
+                // Gửi Base64 đến server
+                const response = await fetch("{{ url_for('process_pasted_image') }}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_b64: image_b64 })
+                });
+
+                spinner.classList.add('d-none'); // Ẩn spinner
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Lỗi không xác định từ server.');
                 }
-            } catch (e) {
-                console.error("Lỗi phân tích dữ liệu ban đầu:", e);
-            }
-        }
 
-        // 2. Xử lý sự kiện dán ảnh
-        const pasteArea = document.getElementById('paste-area');
-        const pastePlaceholder = document.getElementById('paste-placeholder');
-        const preview = document.getElementById('pasted-image-preview');
-        const pasteSpinner = document.getElementById('paste-spinner');
-        
-        pasteArea.addEventListener('paste', async (event) => {
-            event.preventDefault();
-            pasteSpinner.classList.remove('d-none');
-            pastePlaceholder.classList.add('d-none');
-            preview.classList.add('d-none');
+                const extractedData = await response.json();
 
-            const items = (event.clipboardData || window.clipboardData).items;
-            let file = null;
-            for (const item of items) {
-                if (item.type.indexOf('image') === 0) {
-                    file = item.getAsFile();
-                    break;
+                // Kiểm tra nếu AI trả về lỗi
+                if (extractedData.length > 0 && extractedData[0].error) {
+                    throw new Error(extractedData[0].error);
                 }
+
+                // Hiển thị kết quả trong bảng
+                extractedData.forEach(booking => {
+                    const row = `<tr>
+                        <td>${booking.guest_name || 'N/A'}</td>
+                        <td>${booking.booking_id || 'N/A'}</td>
+                        <td>${booking.check_in_date || 'N/A'}</td>
+                        <td>${booking.check_out_date || 'N/A'}</td>
+                        <td>${booking.room_type || 'N/A'}</td>
+                        <td>${booking.total_payment || 'N/A'}</td>
+                    </tr>`;
+                    resultsTbody.innerHTML += row;
+                });
+
+            } catch (error) {
+                spinner.classList.add('d-none');
+                errorMessage.textContent = 'Lỗi: ' + error.message;
+                errorMessage.classList.remove('d-none');
             }
-
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const base64Image = e.target.result;
-                    preview.src = base64Image;
-                    preview.classList.remove('d-none');
-                    
-                    try {
-                        const response = await fetch('/api/process_pasted_image', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ image_b64: base64Image })
-                        });
-                        
-                        pasteSpinner.classList.add('d-none');
-                        const resultData = await response.json();
-                        displayExtractedData(resultData);
-
-                    } catch (error) {
-                        console.error('Error processing pasted image:', error);
-                        displayExtractedData({error: 'Lỗi giao tiếp với máy chủ.'});
-                        pasteSpinner.classList.add('d-none');
-                    }
-                };
-                reader.readAsDataURL(file);
-            } else {
-                pasteSpinner.classList.add('d-none');
-                pastePlaceholder.classList.remove('d-none');
-                displayExtractedData({error: 'Không tìm thấy dữ liệu ảnh trong clipboard.'});
-            }
-        });
-
-        // 3. Xử lý spinner cho form tải file
-        const uploadForm = document.getElementById('upload-image-form');
-        if (uploadForm) {
-            uploadForm.addEventListener('submit', function(e) {
-                const button = document.getElementById('extract-button');
-                const spinner = button.querySelector('.spinner-border');
-                if (button) button.disabled = true;
-                if (spinner) spinner.classList.remove('d-none');
-            });
-        }
-    });
+        };
+        reader.readAsDataURL(imageFile);
+    }
+});
 </script>
 {% endblock %}
