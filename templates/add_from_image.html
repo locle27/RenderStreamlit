@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Thêm Đặt phòng từ Ảnh{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">🖼️ Thêm Đặt phòng từ Ảnh</h1>
+    <p class="lead mb-4">Tải lên ảnh chụp màn hình danh sách đặt phòng để AI tự động trích xuất thông tin.</p>
+
+    <div class="card bg-light mb-5">
+        <div class="card-body">
+            <h5 class="card-title">Bước 1: Tải ảnh lên</h5>
+            <form id="upload-image-form" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="image_file_input" class="form-label">Chọn file ảnh</label>
+                    <input type="file" name="image_file" id="image_file_input" class="form-control" accept="image/*" required>
+                </div>
+                
+                <button id="extract-button" type="submit" class="btn btn-primary">
+                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    Trích xuất thông tin
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {% if extracted_data %}
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Bước 2: Xác nhận và Lưu</h5>
+            <p>Đây là dữ liệu AI đã trích xuất được. Vui lòng kiểm tra và nhấn lưu.</p>
+            
+            <form method="POST" action="{{ url_for('save_extracted_bookings') }}">
+                <input type="hidden" name="extracted_json" value="{{ extracted_data | tojson | safe }}">
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                {% for key in extracted_data[0].keys() %}
+                                    <th>{{ key }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in extracted_data %}
+                            <tr>
+                                {% for value in row.values() %}
+                                    <td>{{ value }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <button type="submit" class="btn btn-success mt-3">Lưu các đặt phòng này</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Chờ cho toàn bộ trang được tải xong
+    document.addEventListener('DOMContentLoaded', function() {
+        // Tìm form bằng ID đã đặt
+        const uploadForm = document.getElementById('upload-image-form');
+
+        // Chỉ thêm sự kiện nếu tìm thấy form
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', function(e) {
+                // Tìm nút bấm và spinner bên trong nó
+                const button = document.getElementById('extract-button');
+                const spinner = button.querySelector('.spinner-border');
+                
+                // Vô hiệu hóa nút và hiển thị spinner
+                if (button) {
+                    button.disabled = true;
+                }
+                if (spinner) {
+                    spinner.classList.remove('d-none');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

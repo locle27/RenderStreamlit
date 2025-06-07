@@ -385,18 +385,186 @@ def append_booking_to_sheet(new_booking_data: dict, gcp_creds_dict: dict, sheet_
         else:
             worksheet = sh.sheet1
 
-        # Lấy header để đảm bảo đúng thứ tự cột
-        headers = worksheet.row_values(1)
-        
-        # Tạo list giá trị theo đúng thứ tự header
-        row_to_append = [new_booking_data.get(header, "") for header in headers]
-        
-        worksheet.append_row(row_to_append, value_input_option='USER_ENTERED')
-        print("Đã thêm đặt phòng mới vào Google Sheet thành công.")
+        worksheet.append_row(list(new_booking_data.values()))
+        print("Đã thêm hàng mới vào Google Sheet.")
 
     except gspread.exceptions.SpreadsheetNotFound:
         print(f"Lỗi: Không tìm thấy Google Sheet với ID '{sheet_id}'.")
         raise
     except Exception as e:
-        print(f"Lỗi không xác định khi ghi vào Google Sheet: {e}")
+        print(f"Lỗi khi thêm hàng mới vào Google Sheet: {e}")
+        raise
+
+# ==============================================================================
+# AI AND IMAGE PROCESSING FUNCTIONS
+# ==============================================================================
+
+def extract_booking_info_from_image_content(image_bytes: bytes) -> Optional[List[Dict[str, Any]]]:
+    """
+    Extracts booking information from an image using Google Gemini.
+    
+    NOTE: This is a placeholder implementation. The actual AI model call is needed.
+    """
+    print("Attempting to extract booking info from image...")
+    
+    # Placeholder: Check if the Gemini library is configured
+    if not genai.get_model('models/gemini-pro-vision'):
+        print("Lỗi: Gemini Pro Vision model is not configured. Cannot process image.")
+        return None
+        
+    try:
+        # This is where the actual call to the Gemini API would go.
+        # For now, we will return a hardcoded sample result for demonstration.
+        print("Bỏ qua lệnh gọi AI thực tế. Trả về dữ liệu mẫu.")
+        sample_data = [
+            {
+                'Tên người đặt': 'John Doe (from Image)',
+                'Số đặt phòng': 'IMG-12345',
+                'Ngày đến': '2025-12-01',
+                'Ngày đi': '2025-12-03',
+                'Tên chỗ nghỉ': 'Sample Room',
+                'Tổng thanh toán': 500000,
+                'Tình trạng': 'OK'
+            },
+            {
+                'Tên người đặt': 'Jane Smith (from Image)',
+                'Số đặt phòng': 'IMG-67890',
+                'Ngày đến': '2025-12-05',
+                'Ngày đi': '2025-12-06',
+                'Tên chỗ nghỉ': 'Another Sample Room',
+                'Tổng thanh toán': 250000,
+                'Tình trạng': 'OK'
+            }
+        ]
+        return sample_data
+    except Exception as e:
+        print(f"An error occurred during image extraction: {e}")
+        return None
+
+# ==============================================================================
+# CALENDAR LOGIC FUNCTIONS
+# ==============================================================================
+
+def get_daily_activity(date_to_check: datetime.date, df: pd.DataFrame) -> Dict[str, List[str]]:
+    """
+    Gets check-in and check-out activities for a specific day.
+    """
+    activities = {'check_in': [], 'check_out': []}
+    if df.empty:
+        return activities
+
+    # Convert DataFrame date columns to datetime.date objects for comparison
+    df['check_in_date_only'] = pd.to_datetime(df['Ngày đến'].apply(parse_app_standard_date), errors='coerce').dt.date
+    df['check_out_date_only'] = pd.to_datetime(df['Ngày đi'].apply(parse_app_standard_date), errors='coerce').dt.date
+
+    # Find check-ins for the given day
+    check_ins = df[df['check_in_date_only'] == date_to_check]
+    if not check_ins.empty:
+        activities['check_in'] = check_ins['Tên người đặt'].tolist()
+
+    # Find check-outs for the given day
+    check_outs = df[df['check_out_date_only'] == date_to_check]
+    if not check_outs.empty:
+        activities['check_out'] = check_outs['Tên người đặt'].tolist()
+        
+    return activities
+
+def get_overall_calendar_day_info(date_to_check: datetime.date, df: pd.DataFrame, total_capacity: int) -> Dict[str, Any]:
+    """
+    Calculates the occupancy info for a specific day.
+    """
+    if df.empty:
+        return {'occupied_units': 0, 'available_units': total_capacity, 'status_text': f"{total_capacity}/{total_capacity} trống"}
+
+    # Ensure date columns are present and in the correct format
+    df['check_in_date_only'] = pd.to_datetime(df['Ngày đến'].apply(parse_app_standard_date), errors='coerce').dt.date
+    df['check_out_date_only'] = pd.to_datetime(df['Ngày đi'].apply(parse_app_standard_date), errors='coerce').dt.date
+    
+    # A room is occupied if the guest has checked in but not yet checked out
+    occupied_df = df[
+        (df['check_in_date_only'] <= date_to_check) & 
+        (df['check_out_date_only'] > date_to_check)
+    ]
+    
+    occupied_units = len(occupied_df)
+    available_units = total_capacity - occupied_units
+    
+    return {
+        'occupied_units': occupied_units,
+        'available_units': available_units,
+        'status_text': f"{available_units}/{total_capacity} trống"
+    }
+
+def get_month_activities(year: int, month: int, df: pd.DataFrame, total_capacity: int) -> Dict[int, Dict[str, Any]]:
+    """
+    Aggregates all calendar activities and info for a given month.
+    """
+    month_activities = {}
+    num_days_in_month = datetime.date(year, month + 1, 1) - datetime.date(year, month, 1) if month < 12 else datetime.date(year + 1, 1, 1) - datetime.date(year, month, 1)
+    
+    # Pre-calculate date columns to avoid recalculating in the loop
+    df['check_in_date_only'] = pd.to_datetime(df['Ngày đến'].apply(parse_app_standard_date), errors='coerce').dt.date
+    df['check_out_date_only'] = pd.to_datetime(df['Ngày đi'].apply(parse_app_standard_date), errors='coerce').dt.date
+
+    for day_num in range(1, num_days_in_month.days + 1):
+        current_date = datetime.date(year, month, day_num)
+        
+        daily_activities = get_daily_activity(current_date, df)
+        daily_info = get_overall_calendar_day_info(current_date, df, total_capacity)
+        
+        month_activities[day_num] = {
+            **daily_activities,
+            **daily_info
+        }
+        
+    return month_activities
+
+# ==============================================================================
+# MESSAGE TEMPLATE FUNCTIONS
+# ==============================================================================
+
+def get_message_templates(gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> List[Dict[str, str]]:
+    """
+    Reads all message templates from a specified Google Sheet worksheet.
+    """
+    try:
+        scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_info(gcp_creds_dict, scopes=scope)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(sheet_id)
+        
+        worksheet = sh.worksheet(worksheet_name)
+        
+        records = worksheet.get_all_records() # Returns a list of dictionaries
+        return records
+    except gspread.exceptions.WorksheetNotFound:
+        print(f"Lỗi: Không tìm thấy worksheet với tên '{worksheet_name}'. Trả về danh sách rỗng.")
+        return []
+    except Exception as e:
+        print(f"Lỗi khi đọc mẫu tin nhắn từ Google Sheet: {e}")
+        return []
+
+def add_message_template(new_template_data: Dict[str, str], gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> None:
+    """
+    Appends a new message template to the specified Google Sheet worksheet.
+    """
+    try:
+        scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_info(gcp_creds_dict, scopes=scope)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(sheet_id)
+        worksheet = sh.worksheet(worksheet_name)
+
+        # Get headers to ensure correct column order
+        headers = worksheet.row_values(1)
+        if not headers: # If sheet is empty, create headers
+            headers = list(new_template_data.keys())
+            worksheet.append_row(headers, value_input_option='USER_ENTERED')
+
+        row_to_append = [new_template_data.get(header, "") for header in headers]
+        worksheet.append_row(row_to_append, value_input_option='USER_ENTERED')
+        print("Đã thêm mẫu tin nhắn mới vào Google Sheet.")
+        
+    except Exception as e:
+        print(f"Lỗi khi thêm mẫu tin nhắn vào Google Sheet: {e}")
         raise 

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý Mẫu Tin nhắn{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Form Thêm Mới -->
+    <div class="col-md-4">
+        <h2 class="mb-4">Thêm Mẫu Tin nhắn Mới</h2>
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('manage_templates') }}">
+                    <div class="mb-3">
+                        <label for="subject" class="form-label">Chủ đề</label>
+                        <input type="text" class="form-control" id="subject" name="subject" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="label" class="form-label">Nhãn (Ví dụ: "Hướng dẫn check-in")</label>
+                        <input type="text" class="form-control" id="label" name="label">
+                    </div>
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Nội dung</label>
+                        <textarea class="form-control" id="content" name="content" rows="8" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Thêm Mẫu Mới</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bảng Hiển thị -->
+    <div class="col-md-8">
+        <h2 class="mb-4">Danh sách Mẫu Tin nhắn</h2>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Chủ đề</th>
+                        <th>Nhãn</th>
+                        <th style="width: 50%;">Nội dung</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in templates %}
+                    <tr>
+                        <td>{{ t.get('Subject', 'N/A') }}</td>
+                        <td><span class="badge bg-info">{{ t.get('Label', '') }}</span></td>
+                        <td>{{ t.get('Content', 'N/A') }}</td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-warning disabled">Sửa</a>
+                            <a href="#" class="btn btn-sm btn-danger disabled">Xóa</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center">Chưa có mẫu tin nhắn nào.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %} 

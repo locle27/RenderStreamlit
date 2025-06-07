@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Lịch Hoạt Động{% endblock %}
+
+{% block content %}
+<style>
+    .calendar-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .calendar-table th, .calendar-table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        vertical-align: top;
+        height: 140px;
+    }
+    .calendar-table th {
+        background-color: #f8f9fa;
+        text-align: center;
+        font-weight: 600;
+    }
+    .calendar-day {
+        font-size: 1.1em;
+        font-weight: bold;
+    }
+    .calendar-table .other-month {
+        color: #adb5bd;
+        background-color: #f8f9fa;
+    }
+    .activity {
+        margin-top: 5px;
+        font-size: 0.8em;
+        line-height: 1.4;
+    }
+    .status-text {
+        font-weight: 500;
+        color: #495057;
+    }
+    .check-in {
+        color: #198754; /* Bootstrap success green */
+    }
+    .check-out {
+        color: #dc3545; /* Bootstrap danger red */
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="{{ url_for('calendar_view', year=prev_year, month=prev_month) }}" class="btn btn-outline-secondary">&laquo; Tháng Trước</a>
+    <h2 class="mb-0">📅 {{ month_name }} {{ year }}</h2>
+    <a href="{{ url_for('calendar_view', year=next_year, month=next_month) }}" class="btn btn-outline-secondary">Tháng Sau &raquo;</a>
+</div>
+
+<div class="table-responsive">
+    <table class="calendar-table">
+        <thead>
+            <tr>
+                <th>Thứ Hai</th>
+                <th>Thứ Ba</th>
+                <th>Thứ Tư</th>
+                <th>Thứ Năm</th>
+                <th>Thứ Sáu</th>
+                <th>Thứ Bảy</th>
+                <th>Chủ Nhật</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for week in month_matrix %}
+            <tr>
+                {% for day in week %}
+                <td class="{{ 'other-month' if day == 0 }}">
+                    {% if day != 0 %}
+                        <div class="calendar-day">{{ day }}</div>
+                        {% set day_info = activities.get(day) %}
+                        {% if day_info %}
+                            <div class="activity">
+                                <span class="status-text">{{ day_info.status_text }}</span>
+                            </div>
+                            {% if day_info.check_in %}
+                                <div class="activity check-in" title="{{ day_info.check_in|join(', ') }}">
+                                    <strong>Đến:</strong> {{ day_info.check_in|length }}
+                                </div>
+                            {% endif %}
+                            {% if day_info.check_out %}
+                                <div class="activity check-out" title="{{ day_info.check_out|join(', ') }}">
+                                    <strong>Đi:</strong> {{ day_info.check_out|length }}
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %} 
