@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Hotel Revenue Dashboard{% endblock %}
+
+{% block content %}
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Hotel Dashboard</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-3">
+                <h4>Filters</h4>
+                <form method="GET" action="{{ url_for('dashboard') }}">
+                    <div class="mb-3">
+                        <label for="start_date" class="form-label">Start Date</label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" value="{{ start_date }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="end_date" class="form-label">End Date</label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" value="{{ end_date }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Room Type</label>
+                        {% for room in all_room_types %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="room_type" value="{{ room }}" id="room_{{ loop.index }}" {% if room in selected_room_types or 'All' in selected_room_types %}checked{% endif %}>
+                            <label class="form-check-label" for="room_{{ loop.index }}">{{ room }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Purchase Party</label>
+                        {% for party in all_purchase_parties %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="purchase_party" value="{{ party }}" id="party_{{ loop.index }}" {% if party in selected_purchase_parties or 'All' in selected_purchase_parties %}checked{% endif %}>
+                            <label class="form-check-label" for="party_{{ loop.index }}">{{ party }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label for="min_price" class="form-label">Min Price</label>
+                        <input type="number" class="form-control" id="min_price" name="min_price" value="{{ min_price or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="max_price" class="form-label">Max Price</label>
+                        <input type="number" class="form-control" id="max_price" name="max_price" value="{{ max_price or '' }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                </form>
+            </div>
+            <div class="col-md-9">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-header">Total Revenue</div>
+                            <div class="card-body">
+                                <h5 class="card-title">${{ "{:,.2f}".format(kpis.total_revenue) }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-header">Total Bookings</div>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ kpis.total_bookings }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-header">Avg. Booking Value</div>
+                            <div class="card-body">
+                                <h5 class="card-title">${{ "{:,.2f}".format(kpis.average_booking_value) }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                 <div class="row mt-3">
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-header">ADR</div>
+                            <div class="card-body">
+                                <h5 class="card-title">${{ "{:,.2f}".format(kpis.adr) }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-header">Avg. Nights / Booking</div>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ "{:,.2f}".format(kpis.average_nights_per_booking) }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="col-md-4">
+                        <div class="card text-center">
+                            <div class="card-header">Occupancy Rate</div>
+                            <div class="card-body">
+                                <h5 class="card-title">{{ "{:,.2f}".format(kpis.occupancy_rate) }}%</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div id="revenue_by_room_type_chart_div" data-chart='{{ revenue_by_room_type_chart | safe }}'></div>
+                    </div>
+                    <div class="col-md-6">
+                        <div id="revenue_by_purchase_party_chart_div" data-chart='{{ revenue_by_purchase_party_chart | safe }}'></div>
+                    </div>
+                </div>
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div id="monthly_revenue_chart_div" data-chart='{{ monthly_revenue_chart | safe }}'></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            function renderPlotlyChart(divId) {
+                const chartDiv = document.getElementById(divId);
+                if (chartDiv && chartDiv.dataset.chart && chartDiv.dataset.chart !== 'None') {
+                    try {
+                        const chartData = JSON.parse(chartDiv.dataset.chart);
+                        const config = {responsive: true};
+                        Plotly.newPlot(divId, chartData.data, chartData.layout, config);
+                    } catch (e) {
+                        console.error('Error parsing or plotting chart for ' + divId, e);
+                        chartDiv.innerHTML = '<p class="text-danger">Could not display chart.</p>';
+                    }
+                }
+            }
+
+            renderPlotlyChart('revenue_by_room_type_chart_div');
+            renderPlotlyChart('revenue_by_purchase_party_chart_div');
+            renderPlotlyChart('monthly_revenue_chart_div');
+        });
+    </script>
+{% endblock %} 
