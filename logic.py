@@ -380,7 +380,7 @@ def prepare_charts_data(df: pd.DataFrame) -> dict:
         monthly_revenue_df['Check-in'] = monthly_revenue_df['Check-in'].dt.strftime('%Y-%m')
 
     # Doanh thu theo loại phòng
-    revenue_by_room_df = df.groupby('Room Type')['Price'].sum().reset_index()
+    revenue_by_room_df = df.groupby('Tên chỗ nghỉ')['Tổng thanh toán'].sum().reset_index()
 
     # Doanh thu theo kênh bán
     revenue_by_party_df = df.groupby('Purchase Party')['Price'].sum().reset_index()
