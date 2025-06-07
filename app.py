@@ -39,6 +39,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY")
 GCP_CREDS_JSON = os.getenv("GCP_CREDS_JSON")
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME")
+MESSAGE_TEMPLATE_WORKSHEET = os.getenv("MESSAGE_TEMPLATE_WORKSHEET")
 
 # Define hotel capacity
 TOTAL_CAPACITY = 10 
@@ -138,9 +139,8 @@ def calendar_view(year=None, month=None):
 
     df, _ = load_data()
     
-    # Get the matrix of days for the month
-    cal = calendar.Calendar()
-    month_matrix = cal.monthcalendar(year, month)
+    # SỬA LỖI: Gọi trực tiếp từ module, không cần tạo đối tượng Calendar
+    month_matrix = calendar.monthcalendar(year, month)
     
     # Use the new logic function to get all activities for the month
     activities = get_month_activities(year, month, df, TOTAL_CAPACITY)
@@ -221,8 +221,6 @@ def save_extracted_bookings():
 
 @app.route('/templates', methods=['GET', 'POST'])
 def manage_templates():
-    MESSAGE_TEMPLATE_WORKSHEET = "MessageTemplate"
-
     if request.method == 'POST':
         subject = request.form.get('subject')
         label = request.form.get('label')
@@ -233,15 +231,24 @@ def manage_templates():
         else:
             try:
                 new_template = {'Subject': subject, 'Label': label, 'Content': content}
-                add_message_template(new_template, GCP_CREDS_DICT, DEFAULT_SHEET_ID, MESSAGE_TEMPLATE_WORKSHEET)
+                add_message_template(
+                    new_template, 
+                    gcp_creds_dict=GCP_CREDS_DICT, 
+                    sheet_id=DEFAULT_SHEET_ID, 
+                    worksheet_name=MESSAGE_TEMPLATE_WORKSHEET
+                )
                 flash('Thêm mẫu tin nhắn thành công!', 'success')
             except Exception as e:
                 flash(f'Lỗi khi thêm mẫu tin nhắn: {e}', 'danger')
         
         return redirect(url_for('manage_templates'))
 
-    # For GET request
-    templates = get_message_templates(GCP_CREDS_DICT, DEFAULT_SHEET_ID, MESSAGE_TEMPLATE_WORKSHEET)
+    # SỬA LỖI: Gọi đúng hàm với đúng worksheet từ biến môi trường
+    templates = get_message_templates(
+        gcp_creds_dict=GCP_CREDS_DICT,
+        sheet_id=DEFAULT_SHEET_ID,
+        worksheet_name=MESSAGE_TEMPLATE_WORKSHEET
+    )
     return render_template('templates.html', templates=templates)
 
 # DYNAMIC ROUTES FOR BOOKING ACTIONS

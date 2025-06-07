@@ -14,6 +14,7 @@ import google.generativeai as genai
 import plotly.express as px
 import plotly.io as p_json
 import plotly
+import calendar
 # Thêm các import khác nếu cần 
 
 def delete_booking_from_sheet(booking_id: str, gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> bool:
@@ -497,56 +498,42 @@ def get_overall_calendar_day_info(date_to_check: datetime.date, df: pd.DataFrame
 
 def get_month_activities(year: int, month: int, df: pd.DataFrame, total_capacity: int) -> Dict[int, Dict[str, Any]]:
     """
-    Aggregates all calendar activities and info for a given month.
+    Computes daily activities, check-ins, check-outs, and occupancy for a given month.
     """
-    month_activities = {}
-    num_days_in_month = datetime.date(year, month + 1, 1) - datetime.date(year, month, 1) if month < 12 else datetime.date(year + 1, 1, 1) - datetime.date(year, month, 1)
-    
-    # Pre-calculate date columns to avoid recalculating in the loop
-    df['check_in_date_only'] = pd.to_datetime(df['Ngày đến'].apply(parse_app_standard_date), errors='coerce').dt.date
-    df['check_out_date_only'] = pd.to_datetime(df['Ngày đi'].apply(parse_app_standard_date), errors='coerce').dt.date
+    month_days = calendar.monthcalendar(year, month)
+    activities = {}
 
-    for day_num in range(1, num_days_in_month.days + 1):
-        current_date = datetime.date(year, month, day_num)
-        
-        daily_activities = get_daily_activity(current_date, df)
-        daily_info = get_overall_calendar_day_info(current_date, df, total_capacity)
-        
-        month_activities[day_num] = {
-            **daily_activities,
-            **daily_info
-        }
-        
-    return month_activities
+    for week in month_days:
+        for day in week:
+            if day == 0:
+                continue
+            
+            current_date = datetime.date(year, month, day)
+            activities[day] = get_overall_calendar_day_info(current_date, df, total_capacity)
+            
+    return activities
 
 # ==============================================================================
 # MESSAGE TEMPLATE FUNCTIONS
 # ==============================================================================
 
-def get_message_templates(gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> List[Dict[str, str]]:
-    """
-    Reads all message templates from a specified Google Sheet worksheet.
-    """
+def get_message_templates(gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> list:
+    """Đọc dữ liệu từ sheet Mẫu Tin Nhắn."""
     try:
         scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         creds = Credentials.from_service_account_info(gcp_creds_dict, scopes=scope)
         gc = gspread.authorize(creds)
         sh = gc.open_by_key(sheet_id)
-        
         worksheet = sh.worksheet(worksheet_name)
-        
-        records = worksheet.get_all_records() # Returns a list of dictionaries
-        return records
-    except gspread.exceptions.WorksheetNotFound:
-        print(f"Lỗi: Không tìm thấy worksheet với tên '{worksheet_name}'. Trả về danh sách rỗng.")
-        return []
+        # get_all_records sẽ trả về một list các dictionary, rất tiện lợi
+        return worksheet.get_all_records()
     except Exception as e:
-        print(f"Lỗi khi đọc mẫu tin nhắn từ Google Sheet: {e}")
+        print(f"Lỗi khi đọc mẫu tin nhắn: {e}")
         return []
 
 def add_message_template(new_template_data: Dict[str, str], gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> None:
     """
-    Appends a new message template to the specified Google Sheet worksheet.
+    Appends a new message template to the specified Google Sheet.
     """
     try:
         scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
