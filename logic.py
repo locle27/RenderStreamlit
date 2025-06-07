@@ -108,7 +108,7 @@ def update_booking_in_sheet(booking_id: str, updated_data: dict, gcp_creds_dict:
         print(f"Lỗi không xác định khi cập nhật Google Sheet: {e}")
         return False
 
-def parse_app_standard_date(date_input: Any) -> Optional[datetime.date]:
+def parse_app_standard_date(date_input: Any) -> datetime.date | None:
     if pd.isna(date_input): return None
     if isinstance(date_input, datetime.datetime): return date_input.date()
     if isinstance(date_input, datetime.date): return date_input
@@ -180,49 +180,25 @@ def get_cleaned_room_types(df_source: Optional[pd.DataFrame]) -> List[str]:
             seen_types.add(s_val)
     return sorted(cleaned_types)
 
-def import_from_gsheet(sheet_id: str, gcp_creds_dict: dict, worksheet_name: Optional[str] = None) -> pd.DataFrame:
-    scope = [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive',
-    ]
+def import_from_gsheet(sheet_id: str, gcp_creds_dict: dict, worksheet_name: str | None = None) -> pd.DataFrame:
+    scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     creds = Credentials.from_service_account_info(gcp_creds_dict, scopes=scope)
     gc = gspread.authorize(creds)
-    try:
-        sh = gc.open_by_key(sheet_id)
-        if worksheet_name:
-            worksheet = sh.worksheet(worksheet_name)
-        else:
-            worksheet = sh.sheet1
-        data = worksheet.get_all_values()
-        if not data or len(data) < 2:
-            return pd.DataFrame()
-        df = pd.DataFrame(data[1:], columns=data[0])
-        # Chuyển đổi kiểu dữ liệu sau khi tải
-        for col_num_common in ["Tổng thanh toán", "Hoa hồng"]:
-            if col_num_common in df.columns:
-                 df[col_num_common] = df[col_num_common].apply(clean_currency_value)
-        cols_to_datetime = ['Check-in Date', 'Check-out Date', 'Booking Date']
-        for col_dt in cols_to_datetime:
-            if col_dt in df.columns:
-                df[col_dt] = pd.to_datetime(df[col_dt], errors='coerce')
-
-        if 'Stay Duration' not in df.columns and 'Check-in Date' in df.columns and 'Check-out Date' in df.columns:
-             df['Stay Duration'] = (df['Check-out Date'] - df['Check-in Date']).dt.days
-             df['Stay Duration'] = df['Stay Duration'].apply(lambda x: max(0, x) if pd.notna(x) else 0)
-        if 'Giá mỗi đêm' not in df.columns and 'Tổng thanh toán' in df.columns and 'Stay Duration' in df.columns:
-            df['Tổng thanh toán'] = pd.to_numeric(df['Tổng thanh toán'], errors='coerce').fillna(0)
-            df['Giá mỗi đêm'] = np.where(
-                (df['Stay Duration'].notna()) & (df['Stay Duration'] > 0) & (df['Tổng thanh toán'].notna()),
-                df['Tổng thanh toán'] / df['Stay Duration'],
-                0.0
-            ).round(0)
-        return df
-    except gspread.exceptions.SpreadsheetNotFound:
-        print(f"Lỗi: Không tìm thấy Google Sheet với ID '{sheet_id}'. Vui lòng kiểm tra lại ID.")
+    sh = gc.open_by_key(sheet_id)
+    worksheet = sh.worksheet(worksheet_name) if worksheet_name else sh.sheet1
+    data = worksheet.get_all_values()
+    if not data or len(data) < 2:
         return pd.DataFrame()
-    except Exception as e:
-        print(f"Lỗi không xác định khi tải từ Google Sheet: {e}")
-        return pd.DataFrame()
+    
+    df = pd.DataFrame(data[1:], columns=data[0])
+    
+    # Chuẩn hóa kiểu dữ liệu ngay khi tải
+    if 'Tổng thanh toán' in df.columns:
+        df['Tổng thanh toán'] = pd.to_numeric(df['Tổng thanh toán'], errors='coerce').fillna(0)
+    if 'Check-in Date' in df.columns:
+        df['Check-in Date'] = pd.to_datetime(df['Check-in Date'], errors='coerce')
+        
+    return df
 
 def upload_to_gsheet(df, sheet_id, gcp_creds_dict, worksheet_name=None):
     """
@@ -248,46 +224,20 @@ def upload_to_gsheet(df, sheet_id, gcp_creds_dict, worksheet_name=None):
     worksheet.update([df_str.columns.values.tolist()] + df_str.values.tolist())
     return sh.url
 
-def create_demo_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    print("Đang tạo dữ liệu demo...")
+def create_demo_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     demo_data = {
-        'Tên chỗ nghỉ': ['Home in Old Quarter - Night market', 'Old Quarter Home- Kitchen & Balcony', 'Home in Old Quarter - Night market', 'Old Quarter Home- Kitchen & Balcony', 'Riverside Boutique Apartment'],
-        'Vị trí': ['Phố Cổ Hà Nội, Hoàn Kiếm, Vietnam', '118 Phố Hàng Bạc, Hoàn Kiếm, Vietnam', 'Phố Cổ Hà Nội, Hoàn Kiếm, Vietnam', '118 Phố Hàng Bạc, Hoàn Kiếm, Vietnam', 'Quận 2, TP. Hồ Chí Minh, Vietnam'],
-        'Tên người đặt': ['Demo User Alpha', 'Demo User Beta', 'Demo User Alpha', 'Demo User Gamma', 'Demo User Delta'],
-        'Thành viên Genius': ['Không', 'Có', 'Không', 'Có', 'Không'],
-        'Ngày đến': ['ngày 22 tháng 5 năm 2025', 'ngày 23 tháng 5 năm 2025', 'ngày 25 tháng 5 năm 2025', 'ngày 26 tháng 5 năm 2025', 'ngày 1 tháng 6 năm 2025'],
-        'Ngày đi': ['ngày 23 tháng 5 năm 2025', 'ngày 24 tháng 5 năm 2025', 'ngày 26 tháng 5 năm 2025', 'ngày 28 tháng 5 năm 2025', 'ngày 5 tháng 6 năm 2025'],
-        'Được đặt vào': ['ngày 20 tháng 5 năm 2025', 'ngày 21 tháng 5 năm 2025', 'ngày 22 tháng 5 năm 2025', 'ngày 23 tháng 5 năm 2025', 'ngày 25 tháng 5 năm 2025'],
-        'Tình trạng': ['OK', 'OK', 'Đã hủy', 'OK', 'OK'],
-        'Tổng thanh toán': [300000, 450000, 200000, 600000, 1200000],
-        'Hoa hồng': [60000, 90000, 40000, 120000, 240000],
-        'Tiền tệ': ['VND', 'VND', 'VND', 'VND', 'VND'],
-        'Số đặt phòng': [f'DEMO{i+1:09d}' for i in range(5)],
-        'Người thu tiền': ['LOC LE', 'THAO LE', 'LOC LE', 'THAO LE', 'LOC LE']
+        'Tên chỗ nghỉ': ['Home in Old Quarter', 'Old Quarter Home', 'Home in Old Quarter', 'Riverside Apartment'],
+        'Tên người đặt': ['Demo User Alpha', 'Demo User Beta', 'Demo User Gamma', 'Demo User Delta'],
+        'Ngày đến': ['ngày 22 tháng 5 năm 2025', 'ngày 23 tháng 5 năm 2025', 'ngày 26 tháng 5 năm 2025', 'ngày 1 tháng 6 năm 2025'],
+        'Ngày đi': ['ngày 23 tháng 5 năm 2025', 'ngày 24 tháng 5 năm 2025', 'ngày 28 tháng 5 năm 2025', 'ngày 5 tháng 6 năm 2025'],
+        'Tình trạng': ['OK', 'OK', 'OK', 'OK'],
+        'Tổng thanh toán': [300000, 450000, 600000, 1200000],
+        'Số đặt phòng': [f'DEMO{i+1:09d}' for i in range(4)],
+        'Người thu tiền': ['LOC LE', 'THAO LE', 'THAO LE', 'LOC LE']
     }
     df_demo = pd.DataFrame(demo_data)
-    df_demo['Check-in Date'] = df_demo['Ngày đến'].apply(parse_app_standard_date)
-    df_demo['Check-out Date'] = df_demo['Ngày đi'].apply(parse_app_standard_date)
-    df_demo['Booking Date'] = df_demo['Được đặt vào'].apply(parse_app_standard_date)
-    df_demo['Check-in Date'] = pd.to_datetime(df_demo['Check-in Date'], errors='coerce')
-    df_demo['Check-out Date'] = pd.to_datetime(df_demo['Check-out Date'], errors='coerce')
-    df_demo['Booking Date'] = pd.to_datetime(df_demo['Booking Date'], errors='coerce')
-    df_demo.dropna(subset=['Check-in Date', 'Check-out Date'], inplace=True)
-    if not df_demo.empty:
-        df_demo['Stay Duration'] = (df_demo['Check-out Date'] - df_demo['Check-in Date']).dt.days
-        df_demo['Stay Duration'] = df_demo['Stay Duration'].apply(lambda x: max(0, x) if pd.notna(x) else 0)
-    else: df_demo['Stay Duration'] = 0
-
-    if 'Tổng thanh toán' in df_demo.columns and 'Stay Duration' in df_demo.columns:
-        df_demo['Tổng thanh toán'] = pd.to_numeric(df_demo['Tổng thanh toán'], errors='coerce').fillna(0)
-        df_demo['Giá mỗi đêm'] = np.where(
-            (df_demo['Stay Duration'].notna()) & (df_demo['Stay Duration'] > 0) & (df_demo['Tổng thanh toán'].notna()),
-            df_demo['Tổng thanh toán'] / df_demo['Stay Duration'],
-            0.0
-        ).round(0)
-    else:
-        df_demo['Giá mỗi đêm'] = 0.0
-
+    df_demo['Check-in Date'] = pd.to_datetime(df_demo['Ngày đến'].apply(parse_app_standard_date), errors='coerce')
+    df_demo['Tổng thanh toán'] = pd.to_numeric(df_demo['Tổng thanh toán'], errors='coerce').fillna(0)
     active_bookings_demo = df_demo[df_demo['Tình trạng'] != 'Đã hủy'].copy()
     return df_demo, active_bookings_demo
 
@@ -364,31 +314,57 @@ def calculate_kpis(df):
 
 def prepare_charts_data(df: pd.DataFrame) -> dict:
     """
-    Prepares various data aggregations for charts.
+    Chuẩn bị dữ liệu đã được tổng hợp cho các biểu đồ trên Dashboard.
+    Sử dụng tên cột tiếng Việt từ dữ liệu gốc.
     """
     if df.empty:
         return {
-            'monthly_revenue': pd.DataFrame(),
-            'revenue_by_room': pd.DataFrame(),
-            'revenue_by_party': pd.DataFrame()
+            'monthly_revenue': pd.DataFrame(columns=['Tháng', 'Doanh thu']),
+            'room_revenue': pd.DataFrame(columns=['Loại phòng', 'Doanh thu']),
+            'collector_revenue': pd.DataFrame(columns=['Người thu tiền', 'Doanh thu'])
         }
 
-    # Doanh thu theo tháng
-    monthly_revenue_df = pd.DataFrame()
-    if 'Check-in' in df.columns and pd.api.types.is_datetime64_any_dtype(df['Check-in']):
-        monthly_revenue_df = df.resample('M', on='Check-in')['Price'].sum().reset_index()
-        monthly_revenue_df['Check-in'] = monthly_revenue_df['Check-in'].dt.strftime('%Y-%m')
+    # Đảm bảo các cột cần thiết tồn tại và đúng kiểu dữ liệu
+    required_cols = {
+        'Check-in Date': 'datetime64[ns]',
+        'Tổng thanh toán': 'float64',
+        'Tên chỗ nghỉ': 'object',
+        'Người thu tiền': 'object'
+    }
+    
+    for col, dtype in required_cols.items():
+        if col not in df.columns:
+            # Nếu cột không tồn tại, tạo cột rỗng với kiểu dữ liệu phù hợp
+            if 'datetime' in dtype:
+                df[col] = pd.NaT
+            elif 'float' in dtype:
+                df[col] = 0.0
+            else:
+                df[col] = 'N/A'
+        # Ép kiểu để đảm bảo tính toán chính xác
+        if 'datetime' in dtype:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+        elif 'float' in dtype:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    # Doanh thu theo loại phòng
-    revenue_by_room_df = df.groupby('Tên chỗ nghỉ')['Tổng thanh toán'].sum().reset_index()
+    # 1. Doanh thu hàng tháng
+    df_monthly = df.dropna(subset=['Check-in Date']).copy()
+    df_monthly['Tháng'] = df_monthly['Check-in Date'].dt.to_period('M').astype(str)
+    monthly_revenue = df_monthly.groupby('Tháng')['Tổng thanh toán'].sum().reset_index()
+    monthly_revenue = monthly_revenue.sort_values('Tháng')
 
-    # Doanh thu theo kênh bán
-    revenue_by_party_df = df.groupby('Purchase Party')['Price'].sum().reset_index()
+    # 2. Doanh thu theo loại phòng
+    room_revenue = df.groupby('Tên chỗ nghỉ')['Tổng thanh toán'].sum().reset_index()
+    room_revenue = room_revenue.sort_values('Tổng thanh toán', ascending=False)
+
+    # 3. Doanh thu theo người thu tiền
+    collector_revenue = df.groupby('Người thu tiền')['Tổng thanh toán'].sum().reset_index()
+    collector_revenue = collector_revenue.sort_values('Tổng thanh toán', ascending=False)
 
     return {
-        'monthly_revenue': monthly_revenue_df,
-        'revenue_by_room': revenue_by_room_df,
-        'revenue_by_party': revenue_by_party_df
+        'monthly_revenue': monthly_revenue,
+        'room_revenue': room_revenue,
+        'collector_revenue': collector_revenue
     }
 
 def append_booking_to_sheet(new_booking_data: dict, gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> None:

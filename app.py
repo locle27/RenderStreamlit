@@ -9,11 +9,7 @@ import plotly
 import plotly.express as px
 
 # Import các hàm logic
-from logic import (
-    import_from_gsheet, create_demo_data, prepare_charts_data,
-    append_booking_to_sheet, find_booking_by_id,
-    update_booking_in_sheet, delete_booking_from_sheet
-)
+from logic import import_from_gsheet, create_demo_data, prepare_charts_data
 
 # Cấu hình đường dẫn và secrets
 BASE_DIR = Path(__file__).resolve().parent
@@ -54,18 +50,26 @@ def dashboard():
     total_bookings_count = len(df)
     active_bookings_count = len(active_bookings)
     
-    # Dữ liệu cho biểu đồ
+    # Chuẩn bị dữ liệu cho biểu đồ
     charts_data = prepare_charts_data(active_bookings)
     
     # Tạo biểu đồ và chuyển thành JSON
-    fig_monthly = px.bar(charts_data['monthly_revenue'], x='Month', y='Total Payment', title='Doanh thu hàng tháng')
+    fig_monthly = px.bar(charts_data['monthly_revenue'], x='Tháng', y='Tổng thanh toán', title='Doanh thu hàng tháng')
     monthly_chart_json = json.dumps(fig_monthly, cls=plotly.utils.PlotlyJSONEncoder)
+
+    fig_room = px.pie(charts_data['room_revenue'], names='Tên chỗ nghỉ', values='Tổng thanh toán', title='Tỷ trọng Doanh thu theo Loại phòng', hole=0.3)
+    room_chart_json = json.dumps(fig_room, cls=plotly.utils.PlotlyJSONEncoder)
+
+    fig_collector = px.bar(charts_data['collector_revenue'], x='Người thu tiền', y='Tổng thanh toán', title='Doanh thu theo Người thu tiền')
+    collector_chart_json = json.dumps(fig_collector, cls=plotly.utils.PlotlyJSONEncoder)
 
     return render_template(
         'dashboard.html',
         total_bookings=total_bookings_count,
         active_bookings=active_bookings_count,
-        monthly_revenue_chart=monthly_chart_json
+        monthly_revenue_chart=monthly_chart_json,
+        room_revenue_chart=room_chart_json,
+        collector_revenue_chart=collector_chart_json
     )
 
 @app.route('/bookings')
