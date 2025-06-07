@@ -1,5 +1,4 @@
 import os
-import base64
 from flask import Flask, render_template, request, redirect, url_for, flash
 from dotenv import load_dotenv
 import json
@@ -20,19 +19,15 @@ load_dotenv(BASE_DIR / ".env")
 app = Flask(__name__, template_folder=BASE_DIR / "templates", static_folder=BASE_DIR / "static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
-# KHỐI MÃ MỚI - CÓ GIẢI MÃ BASE64
-# Lấy thông tin xác thực
-GCP_CREDS_B64 = os.getenv("GCP_CREDS_JSON") # Bây giờ nó là chuỗi Base64
+# KHỐI MÃ GỐC - KHÔNG CÓ BASE64
+GCP_CREDS_JSON = os.getenv("GCP_CREDS_JSON")
 DEFAULT_SHEET_ID = os.getenv("DEFAULT_SHEET_ID")
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME")
 
 try:
-    # Giải mã chuỗi Base64 trở lại thành chuỗi JSON
-    gcp_creds_json_string = base64.b64decode(GCP_CREDS_B64).decode('utf-8')
-    # Chuyển chuỗi JSON thành dictionary
-    GCP_CREDS_DICT = json.loads(gcp_creds_json_string)
+    GCP_CREDS_DICT = json.loads(GCP_CREDS_JSON)
 except Exception as e:
-    print(f"Lỗi khi giải mã credentials: {e}")
+    print(f"Lỗi khi phân tích credentials JSON: {e}")
     GCP_CREDS_DICT = None
 
 @lru_cache(maxsize=1)
