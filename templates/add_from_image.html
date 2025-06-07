@@ -19,22 +19,28 @@
         <p>AI đang phân tích ảnh, vui lòng chờ...</p>
     </div>
     <div id="error-message" class="alert alert-danger d-none"></div>
-    <table class="table table-bordered">
-        <thead>
+    <table class="table table-bordered table-hover">
+        <thead class="table-light">
             <tr>
-                <th>Tên khách</th>
-                <th>Mã ĐP</th>
-                <th>Check-in</th>
-                <th>Check-out</th>
-                <th>Loại phòng</th>
-                <th>Tổng tiền</th>
+                <th>Tên người đặt</th>
+                <th>Ngày đến</th>
+                <th>Ngày đi</th>
+                <th>Tên chỗ nghỉ</th>
+                <th>Tổng thanh toán</th>
+                <th>Hoa hồng</th>
             </tr>
         </thead>
         <tbody id="results-tbody">
-            <!-- Kết quả sẽ được chèn vào đây bằng JavaScript -->
+            <!-- Dữ liệu từ AI sẽ được chèn vào đây -->
         </tbody>
     </table>
-    <!-- Form để lưu sẽ được thêm sau -->
+
+    <form action="{{ url_for('save_extracted_bookings') }}" method="POST" id="save-form" class="d-none">
+        <input type="hidden" name="extracted_json" id="extracted_json_input">
+        <button type="submit" class="btn btn-success mt-3 w-100">
+            <i class="fas fa-save"></i> Lưu các đặt phòng này vào Google Sheets
+        </button>
+    </form>
 </div>
 {% endblock %}
 
@@ -92,17 +98,23 @@ document.addEventListener('paste', async function (event) {
                 }
 
                 // Hiển thị kết quả trong bảng
+                let tableContent = '';
                 extractedData.forEach(booking => {
-                    const row = `<tr>
-                        <td>${booking.guest_name || 'N/A'}</td>
-                        <td>${booking.booking_id || 'N/A'}</td>
-                        <td>${booking.check_in_date || 'N/A'}</td>
-                        <td>${booking.check_out_date || 'N/A'}</td>
-                        <td>${booking.room_type || 'N/A'}</td>
-                        <td>${booking.total_payment || 'N/A'}</td>
-                    </tr>`;
-                    resultsTbody.innerHTML += row;
+                    tableContent += `
+                        <tr>
+                            <td>${booking.guest_name || 'N/A'}</td>
+                            <td>${booking.check_in_date || 'N/A'}</td>
+                            <td>${booking.check_out_date || 'N/A'}</td>
+                            <td>${booking.room_type || 'N/A'}</td>
+                            <td>${booking.total_payment || 0}</td>
+                            <td>${booking.commission || 0}</td>
+                        </tr>
+                    `;
                 });
+                resultsTbody.innerHTML = tableContent;
+
+                // Lưu chuỗi JSON vào input ẩn để gửi đi
+                document.getElementById('extracted_json_input').value = JSON.stringify(extractedData);
 
             } catch (error) {
                 spinner.classList.add('d-none');

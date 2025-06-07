@@ -378,10 +378,8 @@ def prepare_charts_data(df: pd.DataFrame) -> dict:
         'collector_revenue': collector_revenue
     }
 
-def append_booking_to_sheet(new_booking_data: dict, gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> None:
-    """
-    Appends a new booking record to the specified Google Sheet.
-    """
+def append_booking_to_sheet(new_booking_data: list, gcp_creds_dict: dict, sheet_id: str, worksheet_name: str) -> None:
+    """Appends a new booking row to the specified Google Sheet."""
     scope = [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive',
@@ -391,19 +389,11 @@ def append_booking_to_sheet(new_booking_data: dict, gcp_creds_dict: dict, sheet_
     
     try:
         sh = gc.open_by_key(sheet_id)
-        if worksheet_name:
-            worksheet = sh.worksheet(worksheet_name)
-        else:
-            worksheet = sh.sheet1
-
-        worksheet.append_row(list(new_booking_data.values()))
-        print("Đã thêm hàng mới vào Google Sheet.")
-
-    except gspread.exceptions.SpreadsheetNotFound:
-        print(f"Lỗi: Không tìm thấy Google Sheet với ID '{sheet_id}'.")
-        raise
+        worksheet = sh.worksheet(worksheet_name)
+        worksheet.append_row(new_booking_data, value_input_option='USER_ENTERED')
+        print(f"Đã thêm hàng mới vào sheet: {worksheet_name}")
     except Exception as e:
-        print(f"Lỗi khi thêm hàng mới vào Google Sheet: {e}")
+        print(f"Lỗi khi thêm hàng vào Google Sheet: {e}")
         raise
 
 # ==============================================================================
@@ -429,6 +419,7 @@ def extract_booking_info_from_image_content(image_bytes: bytes) -> List[Dict[str
         - "check_out_date" (string): Ngày trả phòng theo định dạng YYYY-MM-DD.
         - "room_type" (string): Tên loại phòng đã đặt.
         - "total_payment" (number): Tổng số tiền thanh toán (chỉ lấy số).
+        - "commission" (number): Tiền hoa hồng, nếu có (chỉ lấy số).
         YÊU CẦU CỰC KỲ QUAN TRỌNG:
         - Kết quả cuối cùng PHẢI là một mảng JSON, ví dụ: [ { ...booking1... }, { ...booking2... } ].
         - Chỉ trả về đối tượng JSON thô, không kèm theo bất kỳ văn bản giải thích hay định dạng markdown nào như ```json.

@@ -11,13 +11,16 @@ from datetime import datetime, timedelta
 import calendar
 import base64
 import google.generativeai as genai
+import gspread
+from google.oauth2.service_account import Credentials
 
 # Import các hàm logic
 from logic import (
     import_from_gsheet, create_demo_data, prepare_charts_data,
     get_daily_activity, get_overall_calendar_day_info,
     extract_booking_info_from_image_content,
-    export_data_to_new_sheet
+    export_data_to_new_sheet,
+    append_booking_to_sheet
     # Các hàm CRUD cho booking và templates sẽ được gọi thông qua các route bên dưới
     # nên không cần import hết để tránh nhầm lẫn.
 )
@@ -183,6 +186,44 @@ def export_bookings():
         flash(f'Lỗi khi export dữ liệu: {e}', 'danger')
     return redirect(url_for('view_bookings'))
     
+@app.route('/bookings/save_extracted', methods=['POST'])
+def save_extracted_bookings():
+    try:
+        extracted_json_str = request.form.get('extracted_json')
+        if not extracted_json_str:
+            flash('Không có dữ liệu để lưu.', 'warning')
+            return redirect(url_for('add_from_image_page'))
+
+        bookings_to_save = json.loads(extracted_json_str)
+        
+        # Lấy header của sheet để đảm bảo đúng thứ tự cột
+        # Đây là một bước quan trọng để tránh lỗi ghi sai cột
+        g_creds = Credentials.from_service_account_info(GCP_CREDS_DICT, scopes=['https://www.googleapis.com/auth/spreadsheets'])
+        g_client = gspread.authorize(g_creds)
+        spreadsheet = g_client.open_by_key(DEFAULT_SHEET_ID)
+        worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
+        headers = worksheet.row_values(1)
+
+        count = 0
+        for booking in bookings_to_save:
+            # Sắp xếp dữ liệu theo đúng thứ tự của header
+            new_row = [booking.get(header) for header in headers]
+            append_booking_to_sheet(
+                new_row,
+                gcp_creds_dict=GCP_CREDS_DICT,
+                sheet_id=DEFAULT_SHEET_ID,
+                worksheet_name=WORKSHEET_NAME
+            )
+            count += 1
+
+        flash(f'Đã lưu thành công {count} đặt phòng mới từ ảnh!', 'success')
+    except Exception as e:
+        flash(f'Lỗi khi lưu các đặt phòng đã trích xuất: {e}', 'danger')
+        # Khi có lỗi, nên chuyển hướng về trang thêm ảnh để người dùng không mất dữ liệu
+        return redirect(url_for('add_from_image_page'))
+        
+    return redirect(url_for('view_bookings'))
+
 # Các route CRUD giả lập để hoàn thiện, bạn sẽ cần thêm logic thực tế
 @app.route('/bookings/add', methods=['GET', 'POST'])
 def add_booking():
