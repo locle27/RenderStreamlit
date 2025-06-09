@@ -1,100 +1,104 @@
-# Hotel Management System
+# 🏨 Hotel Booking Management System
 
-A modern hotel management system built with Flask.
+Flask web application để quản lý đặt phòng khách sạn với tích hợp Google Sheets và AI.
 
-## Setup Instructions
+## ✨ Tính năng
 
-### 1. Clone the repository
+- 📊 Dashboard với thống kê doanh thu
+- 📅 Lịch quản lý đặt phòng 
+- 🤖 AI trích xuất thông tin từ ảnh
+- 📈 Biểu đồ và báo cáo
+- 📱 Responsive design
+- ☁️ Tích hợp Google Sheets
+
+## 🚀 Deploy lên Koyeb (Miễn phí, Always-on)
+
+### 1. Chuẩn bị Repository
+
 ```bash
-git clone https://github.com/locle27/RenderStreamlit.git
-cd RenderStreamlit
+git clone <your-repo>
+cd hotel_flask_app
 ```
 
-### 2. Install dependencies
+### 2. Environment Variables cần thiết
+
+Trong Koyeb Dashboard, thêm các biến môi trường:
+
+```
+FLASK_SECRET_KEY = your_secret_key_here
+DEFAULT_SHEET_ID = your_google_sheet_id
+WORKSHEET_NAME = BookingManager
+MESSAGE_TEMPLATE_WORKSHEET = MessageTemplate
+GOOGLE_API_KEY = your_google_ai_api_key
+PORT = 8080
+FLASK_ENV = production
+```
+
+**Quan trọng nhất - GCP_CREDENTIALS_JSON:**
+```json
+{"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}
+```
+
+### 3. Deploy
+
+1. Kết nối GitHub repo với Koyeb
+2. Koyeb tự detect Dockerfile
+3. Thêm environment variables
+4. Click Deploy
+
+### 4. Kiểm tra
+
+- App sẽ chạy tại: `https://your-app-name.koyeb.app`
+- Không bao giờ ngủ (Always-on)
+- SSL tự động
+
+## 🔧 Local Development
+
 ```bash
+# Install dependencies
 pip install -r requirements.txt
-```
 
-### 3. Setup Google Cloud Credentials
-1. Copy the template file:
-   ```bash
-   cp gcp_credentials.json.template gcp_credentials.json
-   ```
-2. Fill in your actual Google Cloud Service Account credentials in `gcp_credentials.json`
-3. Make sure `gcp_credentials.json` is never committed to git (it's in .gitignore)
+# Copy environment template
+cp .env.example .env
 
-### 4. Environment Variables
-Create a `.env` file with your configuration:
-```bash
-GCP_CREDS_FILE_PATH=gcp_credentials.json
-DEFAULT_SHEET_ID=your_google_sheet_id
-WORKSHEET_NAME=your_worksheet_name
-GOOGLE_API_KEY=your_google_api_key
-FLASK_SECRET_KEY=your_secret_key
-```
+# Edit .env với thông tin thực
 
-### 5. Run the application
-```bash
+# Run locally
 python app.py
 ```
 
-## Features
+## 📁 Cấu trúc Project
 
-- **Dashboard**: Overview of bookings, revenue, and statistics
-- **Booking Management**: Add, edit, delete bookings
-- **Calendar View**: Visual calendar with booking information
-- **Image Processing**: Extract booking info from images using AI
-- **Message Templates**: Manage customer communication templates
-
-## Development Toolbar
-
-The development toolbar provides AI-powered editing capabilities through a browser interface. It allows you to:
-
-1. Select and highlight elements in your web app
-2. Leave comments and feedback about specific UI elements
-3. Export comments for AI processing
-4. Track UI/UX improvements
-
-### How to Enable the Toolbar
-
-1. Set Flask to development mode:
-```bash
-export FLASK_ENV=development
+```
+hotel_flask_app/
+├── app.py              # Main Flask application
+├── logic.py            # Business logic
+├── gcp_helper.py       # Google Cloud helper
+├── requirements.txt    # Python dependencies
+├── Dockerfile          # Container config
+├── start.sh           # Startup script
+├── koyeb.toml         # Koyeb configuration
+├── templates/         # HTML templates
+├── static/           # CSS, JS, images
+└── .env.example      # Environment template
 ```
 
-2. Run the Flask app:
-```bash
-flask run
-```
+## 🛠️ Troubleshooting
 
-3. The development toolbar will appear in the top-right corner of your browser
+**Build failed với pandas:**
+- Đã fix với pandas 2.2.0 + Python 3.11
 
-### Using the Toolbar
+**Google Sheets connection:**
+- Kiểm tra `GCP_CREDENTIALS_JSON` format
+- Đảm bảo service account có quyền access
 
-1. Click on any element in your web app to select it
-2. The toolbar will show information about the selected element:
-   - HTML tag
-   - ID (if any)
-   - CSS classes
-   - Text content
+**App not loading:**
+- Check logs trong Koyeb Dashboard
+- Verify environment variables
 
-3. Add comments about the selected element:
-   - Enter your feedback in the comment box
-   - Click "Save Comment" to store it
-   - Comments are saved in your browser's local storage
+## 📞 Support
 
-4. Export comments:
-   - Click "Export Comments" to download a JSON file
-   - The JSON file contains all comments with element details
-   - This file can be used by AI agents to make changes
-
-### Security
-
-The toolbar is only active in development mode. It will not appear in production.
-
-## Deployment
-
-When deploying to production:
-1. Set environment variables on your hosting platform
-2. Upload your `gcp_credentials.json` file securely (not through git)
-3. Set `DEV_MODE = False` in `app.py`
+Nếu gặp vấn đề, check:
+1. Koyeb Dashboard → App → Logs
+2. Environment variables
+3. Google credentials format
