@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Hotel Management{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Dev toolbar styles are now injected by dev-toolbar.js -->
 </head>
-<body>
+<body {% if dev_mode %}data-dev-mode{% endif %}>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">🏨 Hotel Pro</a>
@@ -16,7 +17,7 @@
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('view_bookings') }}">Quản lý Đặt phòng</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('calendar_view') }}">Lịch</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('add_from_image_page') }}">Thêm từ Ảnh</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('manage_templates') }}">Mẫu Tin nhắn</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('get_templates_page') }}">Mẫu Tin nhắn</a></li>
                 </ul>
             </div>
         </div>
@@ -34,7 +35,13 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     {% block scripts %}{% endblock %}
+
+    {% if dev_mode %}
+    <script src="{{ url_for('static', filename='js/dev-toolbar.js') }}"></script>
+    {% endif %}
 </body>
 </html> 

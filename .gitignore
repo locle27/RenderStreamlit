@@ -10,3 +10,14 @@ __pycache__/
 # IDE configuration files
 .vscode/
 .idea/ 
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Credentials and sensitive files
+gcp_credentials.json
+*credentials*.json
+*.key
+*.pem

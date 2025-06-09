@@ -1,109 +1,92 @@
 {% extends "base.html" %}
 
-{% block title %}Lịch Hoạt Động{% endblock %}
+{% block title %}Lịch Đặt Phòng{% endblock %}
 
 {% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">📅 Lịch Đặt Phòng</h1>
+
+    <!-- Điều hướng tháng -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="{{ url_for('calendar_view', year=prev_month.year, month=prev_month.month) }}" class="btn btn-outline-primary">&larr; Tháng {{ prev_month.month }}</a>
+        <h2 class="mb-0">Tháng {{ current_month.month }}/{{ current_month.year }}</h2>
+        <a href="{{ url_for('calendar_view', year=next_month.year, month=next_month.month) }}" class="btn btn-outline-primary">Tháng {{ next_month.month }} &rarr;</a>
+    </div>
+
+    <!-- Lịch -->
+    <div class="table-responsive">
+        <table class="table table-bordered calendar-table">
+            <thead>
+                <tr class="text-center">
+                    <th>CN</th><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for week in calendar_data %}
+                <tr>
+                    {% for date, date_str, info in week %}
+                        <!-- SỬA LỖI QUAN TRỌNG: Thêm class màu động -->
+                        <td class="day-cell {{ info.status_color if info else '' }}">
+                            {% if date %}
+                                <a href="{{ url_for('calendar_details', date_str=date_str) }}" class="day-link">
+                                    <div class="date-number {% if date == today %}today{% endif %}">{{ date.day }}</div>
+                                    <div class="booking-info">
+                                        {% if info %}
+                                            <span class="badge {{ info.status_color }}">{{ info.status_text }}</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- CSS cho màu sắc và giao diện -->
 <style>
+    .calendar-table td {
+        height: 110px;
+        vertical-align: top;
+        padding: 0;
+    }
+    .day-cell {
+        transition: background-color 0.2s ease-in-out;
+    }
     .day-link {
         display: block;
+        width: 100%;
+        height: 100%;
         text-decoration: none;
         color: inherit;
-        height: 100%;
+        padding: 5px;
     }
     .day-link:hover {
-        background-color: #f1f1f1;
+        background-color: #e9ecef;
     }
-    .calendar-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .calendar-table th, .calendar-table td {
-        border: 1px solid #dee2e6;
-        padding: 8px;
-        vertical-align: top;
-        height: 140px;
-    }
-    .calendar-table th {
-        background-color: #f8f9fa;
-        text-align: center;
-        font-weight: 600;
-    }
-    .calendar-day {
-        font-size: 1.1em;
+    .date-number {
         font-weight: bold;
+        text-align: right;
     }
-    .calendar-table .other-month {
-        color: #adb5bd;
-        background-color: #f8f9fa;
+    .date-number.today {
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        line-height: 28px;
+        text-align: center;
+        float: right;
     }
-    .activity {
-        margin-top: 5px;
-        font-size: 0.8em;
-        line-height: 1.4;
+    .booking-info {
+        margin-top: 30px;
+        text-align: center;
     }
-    .status-text {
-        font-weight: 500;
-        color: #495057;
-    }
-    .check-in {
-        color: #198754; /* Bootstrap success green */
-    }
-    .check-out {
-        color: #dc3545; /* Bootstrap danger red */
-    }
+    .badge.full { background-color: #dc3545; } /* Màu đỏ cho Hết phòng */
+    .badge.occupied { background-color: #0d6efd; } /* Màu xanh cho Có khách */
+    .badge.empty { background-color: #ffc107; color: #000 !important; } /* Màu vàng cho Trống */
 </style>
-
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <a href="{{ url_for('calendar_view', year=prev_year, month=prev_month) }}" class="btn btn-outline-secondary">&laquo; Tháng Trước</a>
-    <h2 class="mb-0">📅 {{ month_name }} {{ year }}</h2>
-    <a href="{{ url_for('calendar_view', year=next_year, month=next_month) }}" class="btn btn-outline-secondary">Tháng Sau &raquo;</a>
-</div>
-
-<div class="table-responsive">
-    <table class="calendar-table">
-        <thead>
-            <tr>
-                <th>Thứ Hai</th>
-                <th>Thứ Ba</th>
-                <th>Thứ Tư</th>
-                <th>Thứ Năm</th>
-                <th>Thứ Sáu</th>
-                <th>Thứ Bảy</th>
-                <th>Chủ Nhật</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for week in month_matrix %}
-            <tr>
-                {% for day in week %}
-                <td class="{{ 'other-month' if day == 0 }}">
-                    {% if day != 0 %}
-                        {% set date_str = '%d-%02d-%02d' | format(year, month, day) %}
-                        <a href="{{ url_for('calendar_day_details', date_str=date_str) }}" class="day-link">
-                            <div class="calendar-day">{{ day }}</div>
-                            {% set day_info = activities.get(day) %}
-                            {% if day_info %}
-                                <div class="activity">
-                                    <span class="status-text">{{ day_info.status_text }}</span>
-                                </div>
-                                {% if day_info.check_in %}
-                                    <div class="activity check-in" title="{{ day_info.check_in|join(', ') }}">
-                                        <strong>Đến:</strong> {{ day_info.check_in|length }}
-                                    </div>
-                                {% endif %}
-                                {% if day_info.check_out %}
-                                    <div class="activity check-out" title="{{ day_info.check_out|join(', ') }}">
-                                        <strong>Đi:</strong> {{ day_info.check_out|length }}
-                                    </div>
-                                {% endif %}
-                            {% endif %}
-                        </a>
-                    {% endif %}
-                </td>
-                {% endfor %}
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
 {% endblock %} 

@@ -3,71 +3,200 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-    <h1 class="mb-4">📊 Tổng quan Dashboard</h1>
-    
-    <!-- Hàng chứa các Card số liệu -->
-    <div class="row">
-        <div class="col-md-6 col-lg-4 mb-4">
-            <div class="card text-white bg-primary h-100">
-                <div class="card-header">Tổng Đặt Phòng</div>
-                <div class="card-body">
-                    <h4 class="card-title">{{ total_bookings }}</h4>
-                    <p class="card-text">{{ active_bookings }} đang hoạt động.</p>
-                </div>
+<div class="container-fluid">
+    <!-- Hàng tiêu đề và bộ lọc ngày -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h2">📊 Dashboard</h1>
+        <form method="get" action="{{ url_for('dashboard') }}" class="d-flex align-items-center">
+            <div class="me-2">
+                <label for="start_date" class="form-label visually-hidden">Từ ngày</label>
+                <input type="date" class="form-control form-control-sm" id="start_date" name="start_date" value="{{ start_date }}">
             </div>
-        </div>
-        <!-- Bạn có thể thêm các card số liệu khác ở đây nếu cần -->
+            <div class="me-2">
+                <label for="end_date" class="form-label visually-hidden">Đến ngày</label>
+                <input type="date" class="form-control form-control-sm" id="end_date" name="end_date" value="{{ end_date }}">
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">Lọc</button>
+        </form>
     </div>
 
-    <hr class="my-4">
-
-    <!-- Hàng chứa các Biểu đồ -->
-    <div class="row">
-        <div class="col-lg-12 mb-4">
-            <div class="card">
+    <!-- Hàng thẻ chỉ số chính -->
+    <div class="row g-2 mb-3">
+        <div class="col">
+            <div class="card text-center h-100">
                 <div class="card-body">
-                    <div id="monthly_revenue_chart_div" data-chart='{{ monthly_revenue_chart | safe }}'></div>
+                    <h5 class="card-title">Tổng Doanh thu</h5>
+                    <p class="card-text fs-4 fw-bold">{{ "{:,.0f}đ".format(total_revenue) }}</p>
                 </div>
             </div>
         </div>
-        <div class="col-lg-6 mb-4">
-            <div class="card">
+        <div class="col">
+            <div class="card text-center h-100">
                 <div class="card-body">
-                    <div id="room_revenue_chart_div" data-chart='{{ room_revenue_chart | safe }}'></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-6 mb-4">
-            <div class="card">
-                <div class="card-body">
-                    <div id="collector_revenue_chart_div" data-chart='{{ collector_revenue_chart | safe }}'></div>
+                    <h5 class="card-title">Tổng Số khách</h5>
+                    <p class="card-text fs-4 fw-bold">{{ total_guests }}</p>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Biểu đồ Doanh thu Hàng tháng -->
+    <div class="row g-2 mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div id="monthly-revenue-chart" data-chart-json="{{ monthly_revenue_chart_json|tojson|safe }}"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hàng bảng dữ liệu -->
+    <div class="row g-2">
+        <!-- Cột bên trái cho các bảng -->
+        <div class="col-lg-8">
+             <!-- Bảng Doanh thu hàng tháng và Doanh thu đã thu -->
+             <div class="row g-2">
+                <div class="col-md-6">
+                     <div class="card h-100">
+                         <div class="card-header">Doanh thu hàng tháng (Tất cả)</div>
+                         <div class="card-body table-container">
+                             <table class="table table-sm table-striped">
+                                 <thead class="sticky-header">
+                                  <tr>
+                                     <th><a href="{{ url_for('dashboard', sort_by='Tháng', sort_order='desc' if current_sort_order == 'asc' else 'asc') }}">Tháng {{ '▲' if current_sort_by == 'Tháng' and current_sort_order == 'asc' else '▼' }}</a></th>
+                                     <th class="text-end"><a href="{{ url_for('dashboard', sort_by='Doanh thu', sort_order='desc' if current_sort_order == 'asc' else 'asc') }}">Doanh thu {{ '▲' if current_sort_by == 'Doanh thu' and current_sort_order == 'asc' else '▼' }}</a></th>
+                                  </tr>
+                                 </thead>
+                                 <tbody>
+                                  {% for row in monthly_revenue_list %}
+                                  <tr>
+                                      <td>{{ row['Tháng'] }}</td>
+                                      <td class="text-end fw-bold">{{ "{:,.0f}".format(row['Doanh thu']) }}đ</td>
+                                  </tr>
+                                  {% endfor %}
+                                 </tbody>
+                             </table>
+                         </div>
+                     </div>
+                 </div>
+                 <div class="col-md-6">
+                     <div class="card h-100">
+                         <div class="card-header bg-success-subtle">Doanh thu Đã thu (Tất cả)</div>
+                         <div class="card-body table-container">
+                             <table class="table table-sm table-striped">
+                                 <thead class="sticky-header">
+                                  <tr>
+                                      <th>Tháng</th>
+                                      <th class="text-end">Doanh thu đã thu</th>
+                                  </tr>
+                                 </thead>
+                                 <tbody>
+                                     {% for row in monthly_collected_revenue_list %}
+                                  <tr>
+                                      <td>{{ row['Tháng'] }}</td>
+                                      <td class="text-end fw-bold text-success">{{ "{:,.0f}".format(row['Doanh thu đã thu']) }}đ</td>
+                                  </tr>
+                                  {% endfor %}
+                                 </tbody>
+                             </table>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+        </div>
+        <!-- Cột bên phải cho biểu đồ và bảng người thu tiền -->
+        <div class="col-lg-4">
+            <div class="row g-2">
+                <div class="col-12">
+                    <div class="card h-100">
+                        <div class="card-body">
+                             <div id="collector-chart" data-chart-json="{{ collector_chart_json|tojson|safe }}"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="card h-100">
+                        <div class="card-header">Doanh thu theo Người thu tiền</div>
+                        <div class="card-body table-container">
+                            <table class="table table-sm table-striped">
+                                <thead class="sticky-header">
+                                    <tr>
+                                        <th>Người thu tiền</th>
+                                        <th class="text-end">Tổng thanh toán</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in collector_revenue_list %}
+                                    <tr>
+                                        <td>{{ row['Người thu tiền'] }}</td>
+                                        <td class="text-end">{{ "{:,.0f}đ".format(row['Tổng thanh toán']) }}</td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="2">Không có dữ liệu.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .table-container { max-height: 300px; overflow-y: auto; }
+    .sticky-header th { position: sticky; top: 0; z-index: 2; background-color: white !important; box-shadow: inset 0 -2px 0 #dee2e6; }
+    .sticky-header th a { text-decoration: none; color: inherit; }
+</style>
+
 {% endblock %}
 
 {% block scripts %}
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            function renderPlotlyChart(divId) {
-                const chartDiv = document.getElementById(divId);
-                if (chartDiv && chartDiv.dataset.chart) {
-                    try {
-                        const chartData = JSON.parse(chartDiv.dataset.chart);
-                        const config = {responsive: true};
-                        Plotly.newPlot(divId, chartData.data, chartData.layout, config);
-                    } catch (e) {
-                        console.error('Lỗi khi vẽ biểu đồ cho ' + divId, e);
-                        chartDiv.innerHTML = '<p class="text-danger">Không thể hiển thị biểu đồ.</p>';
-                    }
+{{ super() }}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM fully loaded and parsed. Initializing charts...");
+
+        // Biểu đồ người thu tiền
+        try {
+            const collectorChartDiv = document.getElementById('collector-chart');
+            const collectorChartJsonString = collectorChartDiv.dataset.chartJson;
+            console.log("Collector chart data string:", collectorChartJsonString.substring(0, 100) + '...');
+            if (collectorChartJsonString && collectorChartJsonString.length > 2) { // Check for more than empty {}
+                const collectorChartData = JSON.parse(collectorChartJsonString);
+                if (collectorChartData && collectorChartData.data && collectorChartData.data[0].values.length > 0) {
+                    Plotly.newPlot('collector-chart', collectorChartData.data, collectorChartData.layout, {responsive: true});
+                    console.log("Collector chart rendered.");
+                } else {
+                    console.log("Collector chart data is empty, not rendering.");
                 }
             }
+        } catch (e) {
+            console.error("Error rendering collector chart:", e);
+        }
 
-            renderPlotlyChart('monthly_revenue_chart_div');
-            renderPlotlyChart('room_revenue_chart_div');
-            renderPlotlyChart('collector_revenue_chart_div');
-        });
-    </script>
+        // Biểu đồ doanh thu hàng tháng
+        try {
+            const monthlyRevenueChartDiv = document.getElementById('monthly-revenue-chart');
+            const monthlyRevenueChartJsonString = monthlyRevenueChartDiv.dataset.chartJson;
+            console.log("Monthly revenue chart data string:", monthlyRevenueChartJsonString.substring(0, 100) + '...');
+            if (monthlyRevenueChartJsonString && monthlyRevenueChartJsonString.length > 2) {
+                const monthlyRevenueChartData = JSON.parse(monthlyRevenueChartJsonString);
+                if (monthlyRevenueChartData && monthlyRevenueChartData.data) {
+                     Plotly.newPlot('monthly-revenue-chart', monthlyRevenueChartData.data, monthlyRevenueChartData.layout, {responsive: true});
+                     console.log("Monthly revenue chart rendered.");
+                } else {
+                    console.log("Monthly revenue chart data is empty, not rendering.");
+                }
+            }
+        } catch(e) {
+            console.error("Error rendering monthly revenue chart:", e);
+        }
+    });
+</script>
 {% endblock %}

@@ -1,129 +1,149 @@
-{% extends "base.html" %}
-
-{% block title %}Thêm từ Ảnh{% endblock %}
-
-{% block content %}
-<h1 class="mb-4">📸 Thêm Đặt phòng từ Ảnh</h1>
-<p>Sao chép một ảnh chụp màn hình danh sách đặt phòng và dán (Ctrl+V) vào khung bên dưới.</p>
-
-<div id="paste-area" class="p-5 border-2 border-dashed rounded-3 text-center bg-light mb-4" style="border-style: dashed;">
-    <h4>Dán ảnh vào đây</h4>
-</div>
-
-<div id="results-area" class="d-none">
-    <h2 class="mb-3">Kết quả trích xuất</h2>
-    <div id="spinner" class="text-center my-4 d-none">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Đang xử lý...</span>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thêm Đặt Phòng từ Ảnh</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 20px; background-color: #f8f9fa; color: #333; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #0056b3; }
+        #paste-area { border: 2px dashed #007bff; border-radius: 8px; padding: 40px; text-align: center; background-color: #f0f8ff; cursor: pointer; transition: background-color 0.3s; }
+        #paste-area:hover { background-color: #e7f3ff; }
+        #results-container { margin-top: 20px; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .error-message { color: #d9534f; background-color: #f2dede; border: 1px solid #ebccd1; padding: 15px; border-radius: 5px; margin-top: 15px; }
+        .success-message { color: #28a745; background-color: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: left; }
+        th { background-color: #e9ecef; }
+        .save-button { background-color: #28a745; color: white; padding: 12px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 20px; }
+        .save-button:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Thêm Đặt Phòng từ Ảnh</h1>
+        <p>Dán (Ctrl+V) hình ảnh chứa danh sách đặt phòng vào khu vực dưới đây.</p>
+        
+        <div id="paste-area">
+            <p>Dán hình ảnh vào đây</p>
         </div>
-        <p>AI đang phân tích ảnh, vui lòng chờ...</p>
+
+        <div id="results-container">
+            <div id="spinner" class="spinner"></div>
+            <div id="message-box"></div>
+            <form id="save-form" action="/bookings/save_extracted" method="POST" style="display: none;">
+                <input type="hidden" name="extracted_json" id="extracted_json_input">
+                <div id="results-table"></div>
+                <button type="submit" class="save-button">💾 Lưu các đặt phòng hợp lệ</button>
+            </form>
+        </div>
     </div>
-    <div id="error-message" class="alert alert-danger d-none"></div>
-    <table class="table table-bordered table-hover">
-        <thead class="table-light">
-            <tr>
-                <th>Tên người đặt</th>
-                <th>Ngày đến</th>
-                <th>Ngày đi</th>
-                <th>Tên chỗ nghỉ</th>
-                <th>Tổng thanh toán</th>
-                <th>Hoa hồng</th>
-            </tr>
-        </thead>
-        <tbody id="results-tbody">
-            <!-- Dữ liệu từ AI sẽ được chèn vào đây -->
-        </tbody>
-    </table>
 
-    <form action="{{ url_for('save_extracted_bookings') }}" method="POST" id="save-form" class="d-none">
-        <input type="hidden" name="extracted_json" id="extracted_json_input">
-        <button type="submit" class="btn btn-success mt-3 w-100">
-            <i class="fas fa-save"></i> Lưu các đặt phòng này vào Google Sheets
-        </button>
-    </form>
-</div>
-{% endblock %}
+    <script>
+        document.addEventListener('paste', async (event) => {
+            const pasteArea = document.getElementById('paste-area');
+            const spinner = document.getElementById('spinner');
+            const messageBox = document.getElementById('message-box');
+            const saveForm = document.getElementById('save-form');
+            const resultsTable = document.getElementById('results-table');
 
-{% block scripts %}
-<script>
-document.addEventListener('paste', async function (event) {
-    const pasteArea = document.getElementById('paste-area');
-    const resultsArea = document.getElementById('results-area');
-    const resultsTbody = document.getElementById('results-tbody');
-    const spinner = document.getElementById('spinner');
-    const errorMessage = document.getElementById('error-message');
+            // Xóa kết quả cũ
+            messageBox.innerHTML = '';
+            resultsTable.innerHTML = '';
+            saveForm.style.display = 'none';
 
-    // Lấy dữ liệu ảnh từ clipboard
-    const items = (event.clipboardData || event.originalEvent.clipboardData).items;
-    let imageFile = null;
-    for (const item of items) {
-        if (item.type.indexOf('image') !== -1) {
-            imageFile = item.getAsFile();
-            break;
-        }
-    }
+            const items = (event.clipboardData || window.clipboardData).items;
+            let imageFile = null;
 
-    if (imageFile) {
-        // Hiển thị khu vực kết quả và spinner
-        resultsArea.classList.remove('d-none');
-        spinner.classList.remove('d-none');
-        errorMessage.classList.add('d-none');
-        resultsTbody.innerHTML = ''; // Xóa kết quả cũ
-
-        // Chuyển ảnh sang Base64
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-            const image_b64 = e.target.result;
-            
-            try {
-                // Gửi Base64 đến server
-                const response = await fetch("{{ url_for('process_pasted_image') }}", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_b64: image_b64 })
-                });
-
-                spinner.classList.add('d-none'); // Ẩn spinner
-
-                if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData.error || 'Lỗi không xác định từ server.');
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    imageFile = item.getAsFile();
+                    break;
                 }
-
-                const extractedData = await response.json();
-
-                // Kiểm tra nếu AI trả về lỗi
-                if (extractedData.length > 0 && extractedData[0].error) {
-                    throw new Error(extractedData[0].error);
-                }
-
-                // Hiển thị kết quả trong bảng
-                let tableContent = '';
-                extractedData.forEach(booking => {
-                    tableContent += `
-                        <tr>
-                            <td>${booking.guest_name || 'N/A'}</td>
-                            <td>${booking.check_in_date || 'N/A'}</td>
-                            <td>${booking.check_out_date || 'N/A'}</td>
-                            <td>${booking.room_type || 'N/A'}</td>
-                            <td>${booking.total_payment || 0}</td>
-                            <td>${booking.commission || 0}</td>
-                        </tr>
-                    `;
-                });
-                resultsTbody.innerHTML = tableContent;
-
-                // Lưu chuỗi JSON vào input ẩn để gửi đi
-                document.getElementById('extracted_json_input').value = JSON.stringify(extractedData);
-
-            } catch (error) {
-                spinner.classList.add('d-none');
-                errorMessage.textContent = 'Lỗi: ' + error.message;
-                errorMessage.classList.remove('d-none');
             }
-        };
-        reader.readAsDataURL(imageFile);
-    }
-});
-</script>
-{% endblock %}
+
+            if (!imageFile) {
+                messageBox.innerHTML = `<div class="error-message">Lỗi: Dữ liệu dán vào không phải là hình ảnh.</div>`;
+                return;
+            }
+
+            spinner.style.display = 'block';
+            pasteArea.style.display = 'none';
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const base64Image = e.target.result;
+                
+                try {
+                    const response = await fetch('/api/process_pasted_image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image_b64: base64Image })
+                    });
+
+                    spinner.style.display = 'none';
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `Lỗi từ server: ${response.statusText}`);
+                    }
+
+                    const extractedData = await response.json();
+
+                    // === PHẦN SỬA LỖI QUAN TRỌNG NHẤT ===
+                    // Luôn kiểm tra dữ liệu trả về có phải là một mảng (Array) hay không trước khi dùng .length
+                    if (!Array.isArray(extractedData) || extractedData.length === 0) {
+                        messageBox.innerHTML = `<div class="error-message">Không tìm thấy đặt phòng nào trong ảnh hoặc có lỗi xảy ra.</div>`;
+                        pasteArea.style.display = 'block';
+                        return;
+                    }
+
+                    // Hiển thị kết quả
+                    let tableHtml = '<table><thead><tr><th>Tên khách</th><th>Ngày đến</th><th>Ngày đi</th><th>Loại phòng</th><th>Tổng tiền</th><th>Ghi chú</th></tr></thead><tbody>';
+                    let validBookings = [];
+
+                    for (const booking of extractedData) {
+                        // Nếu có lỗi trong từng booking, hiển thị lỗi đó
+                        if (booking.error) {
+                            tableHtml += `<tr><td colspan="6" class="error-message">${booking.error}</td></tr>`;
+                            continue;
+                        }
+                        
+                        validBookings.push(booking);
+                        tableHtml += `
+                            <tr>
+                                <td>${booking.guest_name || 'N/A'}</td>
+                                <td>${booking.check_in_date || 'N/A'}</td>
+                                <td>${booking.check_out_date || 'N/A'}</td>
+                                <td>${booking.room_type || 'N/A'}</td>
+                                <td>${booking.total_payment ? booking.total_payment.toLocaleString('vi-VN') : 'N/A'}</td>
+                                <td>${booking.commission ? 'Hoa hồng: ' + booking.commission.toLocaleString('vi-VN') : ''}</td>
+                            </tr>
+                        `;
+                    }
+                    tableHtml += '</tbody></table>';
+                    resultsTable.innerHTML = tableHtml;
+
+                    // Nếu có booking hợp lệ, hiển thị form lưu
+                    if (validBookings.length > 0) {
+                        document.getElementById('extracted_json_input').value = JSON.stringify(validBookings);
+                        saveForm.style.display = 'block';
+                        messageBox.innerHTML = `<div class="success-message">Đã trích xuất thành công ${validBookings.length} đặt phòng. Vui lòng kiểm tra và lưu lại.</div>`;
+                    } else {
+                        messageBox.innerHTML = `<div class="error-message">Không có đặt phòng nào hợp lệ để lưu.</div>`;
+                    }
+
+                } catch (error) {
+                    spinner.style.display = 'none';
+                    messageBox.innerHTML = `<div class="error-message">Lỗi nghiêm trọng: ${error.message}</div>`;
+                    pasteArea.style.display = 'block';
+                }
+            };
+            reader.readAsDataURL(imageFile);
+        });
+    </script>
+</body>
+</html>
