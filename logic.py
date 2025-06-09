@@ -483,36 +483,82 @@ def prepare_dashboard_data(df: pd.DataFrame, start_date, end_date, sort_by=None,
     Chuẩn bị tất cả dữ liệu cho Dashboard với bộ lọc và sắp xếp động.
     """
     if df.empty:
-        return {}
+        return {
+            'total_revenue_selected': 0,
+            'total_guests_selected': 0,
+            'collector_revenue_selected': pd.DataFrame(),
+            'monthly_revenue_all_time': pd.DataFrame(),
+            'monthly_collected_revenue': pd.DataFrame(),
+            'genius_stats': pd.DataFrame(),
+            'monthly_guests_all_time': pd.DataFrame(),
+            'weekly_guests_all_time': pd.DataFrame()
+        }
 
+    # Đảm bảo cột ngày tháng đúng định dạng
+    df = df.copy()
     df['Check-in Date'] = pd.to_datetime(df['Check-in Date'])
 
-    # --- TÍNH TOÁN TRƯỚC KHI LỌC ---
-    # 1. Tính toán doanh thu hàng tháng trên toàn bộ dữ liệu
-    monthly_revenue = df.groupby(df['Check-in Date'].dt.to_period('M'))['Tổng thanh toán'].sum().reset_index()
-    monthly_revenue.rename(columns={'Check-in Date': 'Tháng', 'Tổng thanh toán': 'Doanh thu'}, inplace=True)
-    monthly_revenue['Tháng'] = monthly_revenue['Tháng'].dt.strftime('%Y-%m')
+    # --- TÍNH TOÁN TRƯỚC KHI LỌC (ALL TIME DATA) ---
+    
+    # 1. Doanh thu hàng tháng trên toàn bộ dữ liệu
+    df_with_period = df.copy()
+    df_with_period['Month_Period'] = df_with_period['Check-in Date'].dt.to_period('M')
+    monthly_revenue = df_with_period.groupby('Month_Period')['Tổng thanh toán'].sum().reset_index()
+    monthly_revenue['Tháng'] = monthly_revenue['Month_Period'].dt.strftime('%Y-%m')
+    monthly_revenue = monthly_revenue[['Tháng', 'Tổng thanh toán']].rename(columns={'Tổng thanh toán': 'Doanh thu'})
 
-    # 2. Lọc các giao dịch đã có người thu tiền
+    # 2. Doanh thu đã thu hàng tháng
     collected_df = df[df['Người thu tiền'].notna() & (df['Người thu tiền'] != '') & (df['Người thu tiền'] != 'N/A')].copy()
-    monthly_collected_revenue = collected_df.groupby(collected_df['Check-in Date'].dt.to_period('M'))['Tổng thanh toán'].sum().reset_index()
-    monthly_collected_revenue.rename(columns={'Check-in Date': 'Tháng', 'Tổng thanh toán': 'Doanh thu đã thu'}, inplace=True)
-    monthly_collected_revenue['Tháng'] = monthly_collected_revenue['Tháng'].dt.strftime('%Y-%m')
+    if not collected_df.empty:
+        collected_df['Month_Period'] = collected_df['Check-in Date'].dt.to_period('M')
+        monthly_collected_revenue = collected_df.groupby('Month_Period')['Tổng thanh toán'].sum().reset_index()
+        monthly_collected_revenue['Tháng'] = monthly_collected_revenue['Month_Period'].dt.strftime('%Y-%m')
+        monthly_collected_revenue = monthly_collected_revenue[['Tháng', 'Tổng thanh toán']].rename(columns={'Tổng thanh toán': 'Doanh thu đã thu'})
+    else:
+        monthly_collected_revenue = pd.DataFrame(columns=['Tháng', 'Doanh thu đã thu'])
 
-    # --- LỌC DỮ LIỆU ---
-    # 1. Loại bỏ các đặt phòng trong tương lai CHỈ cho các tính toán theo thời gian đã chọn
-    df_filtered_by_time = df[df['Check-in Date'] <= datetime.datetime.now()].copy()
+    # 3. Thống kê Genius
+    genius_stats = df.groupby('Thành viên Genius').agg({
+        'Tổng thanh toán': 'sum',
+        'Số đặt phòng': 'count'
+    }).reset_index()
+    genius_stats.columns = ['Thành viên Genius', 'Tổng doanh thu', 'Số lượng booking']
 
-    # 2. Lọc dữ liệu theo khoảng thời gian người dùng chọn
+    # 4. Khách hàng hàng tháng (all time)
+    monthly_guests = df_with_period.groupby('Month_Period').size().reset_index(name='Số khách')
+    monthly_guests['Tháng'] = monthly_guests['Month_Period'].dt.strftime('%Y-%m')
+    monthly_guests = monthly_guests[['Tháng', 'Số khách']]
+
+    # 5. Khách hàng hàng tuần (all time)
+    df_with_week = df.copy()
+    df_with_week['Week_Period'] = df_with_week['Check-in Date'].dt.to_period('W')
+    weekly_guests = df_with_week.groupby('Week_Period').size().reset_index(name='Số khách')
+    weekly_guests['Tuần'] = weekly_guests['Week_Period'].astype(str)
+    weekly_guests = weekly_guests[['Tuần', 'Số khách']]
+
+    # --- LỌC DỮ LIỆU THEO THỜI GIAN NGƯỜI DÙNG CHỌN ---
     start_ts = pd.Timestamp(start_date)
     end_ts = pd.Timestamp(end_date)
-    filtered_df = df_filtered_by_time[(df_filtered_by_time['Check-in Date'] >= start_ts) & (df_filtered_by_time['Check-in Date'] <= end_ts)].copy()
-
-    # --- TÍNH TOÁN CÁC CHỈ SỐ SAU KHI LỌC ---
-    total_revenue_selected = filtered_df['Tổng thanh toán'].sum()
-    total_guests_selected = len(filtered_df)
-    collector_revenue_selected = filtered_df.groupby('Người thu tiền')['Tổng thanh toán'].sum().reset_index()
     
+    # Lọc theo khoảng thời gian và loại bỏ booking tương lai
+    df_filtered = df[
+        (df['Check-in Date'] >= start_ts) & 
+        (df['Check-in Date'] <= end_ts) &
+        (df['Check-in Date'] <= pd.Timestamp.now())
+    ].copy()
+
+    # --- TÍNH TOÁN CÁC CHỈ SỐ THEO THỜI GIAN ĐÃ CHỌN ---
+    total_revenue_selected = df_filtered['Tổng thanh toán'].sum()
+    total_guests_selected = len(df_filtered)
+    
+    # Doanh thu theo người thu tiền (trong khoảng thời gian đã chọn)
+    collector_revenue_selected = df_filtered.groupby('Người thu tiền')['Tổng thanh toán'].sum().reset_index()
+    collector_revenue_selected = collector_revenue_selected[
+        collector_revenue_selected['Người thu tiền'].notna() & 
+        (collector_revenue_selected['Người thu tiền'] != '') & 
+        (collector_revenue_selected['Người thu tiền'] != 'N/A')
+    ]
+
     # --- SẮP XẾP ĐỘNG ---
     is_ascending = sort_order == 'asc'
     if sort_by and sort_by in monthly_revenue.columns:
@@ -520,7 +566,10 @@ def prepare_dashboard_data(df: pd.DataFrame, start_date, end_date, sort_by=None,
     else:
         monthly_revenue = monthly_revenue.sort_values(by='Tháng', ascending=False)
         
+    # Sắp xếp các dataframe khác
     monthly_collected_revenue = monthly_collected_revenue.sort_values('Tháng', ascending=False)
+    monthly_guests = monthly_guests.sort_values('Tháng', ascending=False)
+    weekly_guests = weekly_guests.sort_values('Tuần', ascending=False)
 
     return {
         'total_revenue_selected': total_revenue_selected,
@@ -528,6 +577,9 @@ def prepare_dashboard_data(df: pd.DataFrame, start_date, end_date, sort_by=None,
         'collector_revenue_selected': collector_revenue_selected,
         'monthly_revenue_all_time': monthly_revenue,
         'monthly_collected_revenue': monthly_collected_revenue,
+        'genius_stats': genius_stats,
+        'monthly_guests_all_time': monthly_guests,
+        'weekly_guests_all_time': weekly_guests,
     }
 
 def extract_booking_info_from_image_content(image_bytes: bytes) -> List[Dict[str, Any]]:

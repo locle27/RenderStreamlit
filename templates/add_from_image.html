@@ -20,11 +20,21 @@
         th { background-color: #e9ecef; }
         .save-button { background-color: #28a745; color: white; padding: 12px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 20px; }
         .save-button:hover { background-color: #218838; }
+        .home-button { background-color: #6c757d; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 14px; transition: background-color 0.3s; }
+        .home-button:hover { background-color: #5a6268; }
+        .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header-spacer { width: 120px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📸 Thêm Đặt Phòng từ Ảnh</h1>
+        <div class="header-container">
+            <button onclick="goToHome()" class="home-button">
+                🏠 Trang chính
+            </button>
+            <h1 style="margin: 0; color: #0056b3;">📸 Thêm Đặt Phòng từ Ảnh</h1>
+            <div class="header-spacer"></div> <!-- Spacer để cân bằng layout -->
+        </div>
         <p>Dán (Ctrl+V) hình ảnh chứa danh sách đặt phòng vào khu vực dưới đây.</p>
         
         <div id="paste-area">
@@ -43,6 +53,11 @@
     </div>
 
     <script>
+        // Function để chuyển về trang chính
+        function goToHome() {
+            window.location.href = '/';
+        }
+        
         document.addEventListener('paste', async (event) => {
             const pasteArea = document.getElementById('paste-area');
             const spinner = document.getElementById('spinner');

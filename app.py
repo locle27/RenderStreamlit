@@ -49,7 +49,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "a_default_secret_key_for_develop
 
 @app.context_processor
 def inject_dev_mode():
-    return dict(dev_mode=app.config['DEBUG'])
+    return dict(dev_mode=DEV_MODE)
 
 @app.context_processor
 def inject_pandas():
@@ -119,6 +119,10 @@ def dashboard():
     monthly_revenue_chart_json = {}
     
     if not monthly_revenue_df.empty:
+        print(f"DEBUG: Creating chart with {len(monthly_revenue_df)} data points")
+        print(f"DEBUG: Data columns: {monthly_revenue_df.columns.tolist()}")
+        print(f"DEBUG: Sample data: {monthly_revenue_df.head()}")
+        
         # Sắp xếp lại theo tháng để biểu đồ đường đúng thứ tự
         monthly_revenue_df_sorted = monthly_revenue_df.sort_values('Tháng')
         
@@ -192,6 +196,151 @@ def dashboard():
         )
         
         monthly_revenue_chart_json = json.loads(fig.to_json())
+        print(f"DEBUG: Chart JSON created successfully")
+    else:
+        print("DEBUG: No monthly revenue data for chart")
+
+    # Tạo biểu đồ cột doanh thu đã thu vs chưa thu
+    collected_vs_uncollected_chart_json = {}
+    
+    # Tính toán doanh thu đã thu và chưa thu
+    if not df.empty:
+        # Chuyển đổi start_date và end_date thành Timestamp để lọc
+        start_ts = pd.Timestamp(start_date)
+        end_ts = pd.Timestamp(end_date)
+        
+        # Lọc theo thời gian đã chọn
+        df_period = df[
+            (df['Check-in Date'] >= start_ts) & 
+            (df['Check-in Date'] <= end_ts) &
+            (df['Check-in Date'] <= pd.Timestamp.now())
+        ].copy()
+        
+        # Tính doanh thu đã thu (LOC LE và THAO LE)
+        collected_df = df_period[
+            df_period['Người thu tiền'].isin(['LOC LE', 'THAO LE'])
+        ].copy()
+        
+        # Tính doanh thu chưa thu (các giá trị khác hoặc rỗng)
+        uncollected_df = df_period[
+            ~df_period['Người thu tiền'].isin(['LOC LE', 'THAO LE']) |
+            df_period['Người thu tiền'].isna() |
+            (df_period['Người thu tiền'] == '')
+        ].copy()
+        
+        # Nhóm theo tháng
+        if not collected_df.empty:
+            collected_df['Month_Period'] = collected_df['Check-in Date'].dt.to_period('M')
+            collected_monthly = collected_df.groupby('Month_Period')['Tổng thanh toán'].sum().reset_index()
+            collected_monthly['Tháng'] = collected_monthly['Month_Period'].dt.strftime('%Y-%m')
+        else:
+            collected_monthly = pd.DataFrame(columns=['Tháng', 'Tổng thanh toán'])
+        
+        if not uncollected_df.empty:
+            uncollected_df['Month_Period'] = uncollected_df['Check-in Date'].dt.to_period('M')
+            uncollected_monthly = uncollected_df.groupby('Month_Period')['Tổng thanh toán'].sum().reset_index()
+            uncollected_monthly['Tháng'] = uncollected_monthly['Month_Period'].dt.strftime('%Y-%m')
+        else:
+            uncollected_monthly = pd.DataFrame(columns=['Tháng', 'Tổng thanh toán'])
+        
+        # Merge dữ liệu để có cả hai cột
+        if not collected_monthly.empty and not uncollected_monthly.empty:
+            merged_data = pd.merge(
+                collected_monthly[['Tháng', 'Tổng thanh toán']].rename(columns={'Tổng thanh toán': 'Đã thu'}),
+                uncollected_monthly[['Tháng', 'Tổng thanh toán']].rename(columns={'Tổng thanh toán': 'Chưa thu'}),
+                on='Tháng', how='outer'
+            ).fillna(0)
+        elif not collected_monthly.empty:
+            merged_data = collected_monthly[['Tháng', 'Tổng thanh toán']].rename(columns={'Tổng thanh toán': 'Đã thu'})
+            merged_data['Chưa thu'] = 0
+        elif not uncollected_monthly.empty:
+            merged_data = uncollected_monthly[['Tháng', 'Tổng thanh toán']].rename(columns={'Tổng thanh toán': 'Chưa thu'})
+            merged_data['Đã thu'] = 0
+        else:
+            merged_data = pd.DataFrame(columns=['Tháng', 'Đã thu', 'Chưa thu'])
+        
+        if not merged_data.empty:
+            # Sắp xếp theo tháng
+            merged_data = merged_data.sort_values('Tháng')
+            
+            # Tạo biểu đồ cột grouped với custom hover
+            fig_collected = px.bar(
+                merged_data, 
+                x='Tháng', 
+                y=['Đã thu', 'Chưa thu'],
+                title='💰 Doanh thu Đã thu vs Chưa thu (Theo tháng)',
+                color_discrete_map={
+                    'Đã thu': '#2ecc71',
+                    'Chưa thu': '#e74c3c'
+                },
+                text_auto=True  # Hiển thị giá trị trên cột
+            )
+            
+            # Cải thiện text hiển thị trên cột
+            fig_collected.update_traces(
+                texttemplate='%{y:,.0f}đ',
+                textposition='outside',
+                hovertemplate='<b>%{fullData.name}</b><br>' +
+                             'Tháng: %{x}<br>' +
+                             'Số tiền: %{y:,.0f}đ<br>' +
+                             '<extra></extra>'
+            )
+            
+            # Cải thiện layout
+            fig_collected.update_layout(
+                title={
+                    'text': '💰 Doanh thu Đã thu vs Chưa thu (Theo tháng)',
+                    'x': 0.5,
+                    'font': {'size': 16, 'family': 'Arial, sans-serif', 'color': '#2c3e50'}
+                },
+                xaxis_title='Tháng',
+                yaxis_title='Doanh thu (VND)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font={'family': 'Arial, sans-serif', 'size': 12},
+                margin=dict(l=60, r=30, t=100, b=50),  # Tăng margin top cho text trên cột
+                height=450,  # Tăng chiều cao để chứa text
+                showlegend=True,
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="center",
+                    x=0.5
+                ),
+                hovermode='x unified',
+                bargap=0.6,  # Khoảng cách giữa các nhóm cột
+                bargroupgap=0.1  # Khoảng cách giữa các cột trong nhóm
+            )
+            
+            # Cải thiện axes
+            fig_collected.update_xaxes(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(128,128,128,0.2)',
+                showline=True,
+                linewidth=1,
+                linecolor='rgba(128,128,128,0.5)'
+            )
+            
+            fig_collected.update_yaxes(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(128,128,128,0.2)',
+                showline=True,
+                linewidth=1,
+                linecolor='rgba(128,128,128,0.5)',
+                tickformat=',.0f'
+            )
+            
+            collected_vs_uncollected_chart_json = json.loads(fig_collected.to_json())
+            
+            # Tạo dữ liệu bảng để hiển thị
+            collected_vs_uncollected_table_data = merged_data.to_dict('records')
+            print(f"DEBUG: Collected vs Uncollected chart created successfully")
+        else:
+            print("DEBUG: No data for collected vs uncollected chart")
+            collected_vs_uncollected_table_data = []
 
     # Tạo biểu đồ pie chart đẹp hơn cho người thu tiền
     collector_revenue_data = dashboard_data.get('collector_revenue_selected', pd.DataFrame()).to_dict('records')
@@ -264,6 +413,8 @@ def dashboard():
         weekly_guests_list=weekly_guests_list,
         monthly_collected_revenue_list=monthly_collected_revenue_list,
         monthly_revenue_chart_json=monthly_revenue_chart_json,
+        collected_vs_uncollected_chart_json=collected_vs_uncollected_chart_json,
+        collected_vs_uncollected_table_data=collected_vs_uncollected_table_data,
         collector_chart_json=collector_chart_data,
         collector_revenue_list=collector_revenue_list,
         start_date=start_date.strftime('%Y-%m-%d'),
@@ -278,8 +429,8 @@ def view_bookings():
     
     # Lấy tham số từ URL
     search_term = request.args.get('search_term', '').strip().lower()
-    sort_by = request.args.get('sort_by', 'Check-in Date') # Mặc định sắp xếp
-    order = request.args.get('order', 'desc') # Mặc định giảm dần
+    sort_by = request.args.get('sort_by', 'Check-in Date') # Mặc định sắp xếp theo Check-in Date
+    order = request.args.get('order', 'asc') # Mặc định tăng dần (ascending)
 
     # Lọc theo từ khóa tìm kiếm
     if search_term:
