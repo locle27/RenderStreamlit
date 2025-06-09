@@ -2,6 +2,50 @@
 
 A modern hotel management system built with Flask.
 
+## Setup Instructions
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/locle27/RenderStreamlit.git
+cd RenderStreamlit
+```
+
+### 2. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Setup Google Cloud Credentials
+1. Copy the template file:
+   ```bash
+   cp gcp_credentials.json.template gcp_credentials.json
+   ```
+2. Fill in your actual Google Cloud Service Account credentials in `gcp_credentials.json`
+3. Make sure `gcp_credentials.json` is never committed to git (it's in .gitignore)
+
+### 4. Environment Variables
+Create a `.env` file with your configuration:
+```bash
+GCP_CREDS_FILE_PATH=gcp_credentials.json
+DEFAULT_SHEET_ID=your_google_sheet_id
+WORKSHEET_NAME=your_worksheet_name
+GOOGLE_API_KEY=your_google_api_key
+FLASK_SECRET_KEY=your_secret_key
+```
+
+### 5. Run the application
+```bash
+python app.py
+```
+
+## Features
+
+- **Dashboard**: Overview of bookings, revenue, and statistics
+- **Booking Management**: Add, edit, delete bookings
+- **Calendar View**: Visual calendar with booking information
+- **Image Processing**: Extract booking info from images using AI
+- **Message Templates**: Manage customer communication templates
+
 ## Development Toolbar
 
 The development toolbar provides AI-powered editing capabilities through a browser interface. It allows you to:
@@ -46,4 +90,11 @@ flask run
 
 ### Security
 
-The toolbar is only active in development mode. It will not appear in production. 
+The toolbar is only active in development mode. It will not appear in production.
+
+## Deployment
+
+When deploying to production:
+1. Set environment variables on your hosting platform
+2. Upload your `gcp_credentials.json` file securely (not through git)
+3. Set `DEV_MODE = False` in `app.py`
