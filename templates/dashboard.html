@@ -44,8 +44,25 @@
     <div class="row g-2 mb-3">
         <div class="col-12">
             <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">📊 Biểu đồ Doanh thu Hàng tháng</h5>
+                </div>
                 <div class="card-body">
                     <div id="monthly-revenue-chart" data-chart-json="{{ monthly_revenue_chart_json|tojson|safe }}"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Biểu đồ Cột So sánh Doanh thu -->
+    <div class="row g-2 mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">📈 So sánh Doanh thu Hàng tháng</h5>
+                </div>
+                <div class="card-body">
+                    <div id="monthly-revenue-bar-chart"></div>
                 </div>
             </div>
         </div>
@@ -180,7 +197,7 @@
             console.error("Error rendering collector chart:", e);
         }
 
-        // Biểu đồ doanh thu hàng tháng
+        // Biểu đồ doanh thu hàng tháng (line chart)
         try {
             const monthlyRevenueChartDiv = document.getElementById('monthly-revenue-chart');
             const monthlyRevenueChartJsonString = monthlyRevenueChartDiv.dataset.chartJson;
@@ -196,6 +213,87 @@
             }
         } catch(e) {
             console.error("Error rendering monthly revenue chart:", e);
+        }
+
+        // Biểu đồ cột so sánh doanh thu hàng tháng
+        try {
+            const monthlyRevenueData = {{ monthly_revenue_list|tojson|safe }};
+            console.log("Monthly revenue data for bar chart:", monthlyRevenueData);
+            
+            if (monthlyRevenueData && monthlyRevenueData.length > 0) {
+                const months = monthlyRevenueData.map(item => item['Tháng']);
+                const revenues = monthlyRevenueData.map(item => item['Doanh thu']);
+                
+                const barChartData = [{
+                    x: months,
+                    y: revenues,
+                    type: 'bar',
+                    name: 'Doanh thu',
+                    marker: {
+                        color: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#FFB347', '#87CEEB', '#F0E68C', '#FFA07A', '#20B2AA'],
+                        line: {
+                            color: '#2c3e50',
+                            width: 1
+                        }
+                    },
+                    text: revenues.map(r => (r / 1000000).toFixed(1) + 'M'),
+                    textposition: 'auto',
+                    hovertemplate: '<b>%{x}</b><br>' +
+                                  'Doanh thu: %{y:,.0f}đ<br>' +
+                                  '<extra></extra>'
+                }];
+
+                const barChartLayout = {
+                    title: {
+                        text: '💰 So sánh Doanh thu theo Tháng',
+                        x: 0.5,
+                        font: {
+                            size: 18,
+                            family: 'Arial, sans-serif',
+                            color: '#2c3e50'
+                        }
+                    },
+                    xaxis: {
+                        title: 'Tháng',
+                        tickangle: -45,
+                        showgrid: true,
+                        gridcolor: 'rgba(128,128,128,0.2)',
+                        showline: true,
+                        linecolor: 'rgba(128,128,128,0.5)'
+                    },
+                    yaxis: {
+                        title: 'Doanh thu (VND)',
+                        tickformat: ',.0f',
+                        showgrid: true,
+                        gridcolor: 'rgba(128,128,128,0.2)',
+                        showline: true,
+                        linecolor: 'rgba(128,128,128,0.5)'
+                    },
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    font: {
+                        family: 'Arial, sans-serif',
+                        size: 12,
+                        color: '#2c3e50'
+                    },
+                    margin: {
+                        l: 80,
+                        r: 30,
+                        t: 80,
+                        b: 100
+                    },
+                    height: 400,
+                    showlegend: false
+                };
+
+                Plotly.newPlot('monthly-revenue-bar-chart', barChartData, barChartLayout, {responsive: true});
+                console.log("Monthly revenue bar chart rendered.");
+            } else {
+                console.log("No monthly revenue data available for bar chart.");
+                document.getElementById('monthly-revenue-bar-chart').innerHTML = '<p class="text-center text-muted">Không có dữ liệu để hiển thị biểu đồ</p>';
+            }
+        } catch(e) {
+            console.error("Error rendering monthly revenue bar chart:", e);
         }
     });
 </script>
