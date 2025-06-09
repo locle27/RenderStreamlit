@@ -21,3 +21,19 @@ gcp_credentials.json
 *credentials*.json
 *.key
 *.pem
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+
+# Temporary files
+*.tmp
+.cache/

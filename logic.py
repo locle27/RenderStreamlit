@@ -15,6 +15,7 @@ import plotly.io as p_json
 import plotly
 import calendar
 from io import BytesIO
+from gcp_helper import get_gspread_client_safe
 
 # ==============================================================================
 # GOOGLE SHEETS HELPER
@@ -22,7 +23,7 @@ from io import BytesIO
 
 def _get_gspread_client(gcp_creds_file_path: str):
     try:
-        return gspread.service_account(filename=gcp_creds_file_path)
+        return get_gspread_client_safe(gcp_creds_file_path)
     except Exception as e:
         print(f"Lỗi nghiêm trọng khi xác thực với file credentials '{gcp_creds_file_path}': {e}")
         raise

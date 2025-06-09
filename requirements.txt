@@ -1,24 +1,28 @@
 # Flask and Web Server
-flask
-gunicorn
+flask==2.3.3
+gunicorn==21.2.0
 
 # Data Handling
-pandas
-numpy
-openpyxl
-xlrd
+pandas==2.1.1
+numpy==1.24.3
+openpyxl==3.1.2
+xlrd==2.0.1
 
 # Google APIs
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
-gspread
-google-generativeai
+google-api-python-client==2.100.0
+google-auth-httplib2==0.1.1
+google-auth-oauthlib==1.0.0
+gspread==5.10.0
+google-generativeai==0.1.0
 
 # Utilities
-python-dotenv
-python-dateutil
-Pillow
-beautifulsoup4
-PyPDF2
-plotly
+python-dotenv==1.0.0
+python-dateutil==2.8.2
+Pillow==10.0.1
+beautifulsoup4==4.12.2
+PyPDF2==3.0.1
+plotly==5.16.1
+
+# Additional dependencies for production
+Werkzeug==2.3.7
+Jinja2==3.1.2
